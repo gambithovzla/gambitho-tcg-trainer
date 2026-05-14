@@ -1,0 +1,25 @@
+CREATE TABLE IF NOT EXISTS dim_card_core (
+  uuid TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  subtitle TEXT,
+  set_id TEXT,
+  collector_number TEXT,
+  rarity TEXT
+);
+
+CREATE TABLE IF NOT EXISTS fact_card_stats (
+  card_uuid TEXT PRIMARY KEY REFERENCES dim_card_core (uuid),
+  cost INTEGER,
+  inkwell_inkable BOOLEAN,
+  strength INTEGER,
+  willpower INTEGER,
+  lore INTEGER,
+  move_cost INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS dim_card_tags (
+  card_uuid TEXT PRIMARY KEY REFERENCES dim_card_core (uuid),
+  color_aspect TEXT[],
+  card_type TEXT,
+  subtypes TEXT[]
+);
