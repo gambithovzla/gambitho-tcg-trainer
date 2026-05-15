@@ -41,7 +41,7 @@ La documentacion completa de strict mode (payloads, respuestas `200`/`422`, `err
 - Contrato estricto en simulacion (`strict` / `strict_intent_resolution`) con errores versionados (`contract_version: "1"`).
 - FSM reforzado con validacion de legalidad de acciones (evita aplicar acciones invalidas).
 - Golden tests agregados para transiciones de engine y snapshot de contrato en `/simulate/match`.
-- Suite de pruebas actual: `86 passed` en `backend`.
+- Suite de pruebas actual: `90 passed` en `backend`.
 
 ## Roadmap de continuidad
 
@@ -71,6 +71,14 @@ Benchmark offline (reproducible por `seed`):
 ```bash
 python -m src.domain.simulation.benchmark --seeds 7,11,19 --matches-per-seed 20 --max-turns 12 --target-lore 8 --ismcts-iterations 64
 ```
+
+Benchmark con rollout policy y modo espejo (sesgo de primer turno):
+
+```bash
+python -m src.domain.simulation.benchmark --seeds 7,11,19 --matches-per-seed 15 --max-turns 12 --target-lore 8 --ismcts-iterations 64 --rollout-policy random --mirror-start-player
+```
+
+`rollout_policy` soporta `random` (default, estable) y `guided_v1` (experimental).
 
 Ejemplo de lectura base: `docs/benchmarks/baseline-fase2-v1.md`.
 

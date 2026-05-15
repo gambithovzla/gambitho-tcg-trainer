@@ -9,7 +9,7 @@ Plan de continuidad para llevar `gambitho-tcg-trainer` desde MVP tecnico a v1 ut
 - Linter/reparacion de mazos operativo.
 - Simulacion con `heuristic` e `ismcts` base disponible via API.
 - Strict mode de intents implementado y documentado (incluye `contract_version: "1"` en errores).
-- Test suite backend estable: `86 passed`.
+- Test suite backend estable: `90 passed`.
 
 ## Fase 1 - Simulator confiable (prioridad alta)
 
@@ -72,6 +72,7 @@ Definition of Done Fase 3:
 
 1. Diseñar `guided_v2` (rollout policy) con foco explicito en reducir sesgo P1 sin aumentar draws.
 2. Correr A/B (`random` vs `guided_v2`) en modo espejo como criterio de aceptacion.
+3. Ampliar corrida espejo (mismo protocolo) a escala baseline para confirmar que la mejora no es solo ruido de muestra.
 
 ## Issue list (lista operativa)
 
