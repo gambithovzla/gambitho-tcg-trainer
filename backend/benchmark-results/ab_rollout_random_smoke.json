@@ -1,0 +1,50 @@
+{
+  "seeds": [
+    7,
+    11,
+    19
+  ],
+  "matches_per_seed": 15,
+  "max_turns": 12,
+  "target_lore": 8,
+  "ismcts_iterations": 64,
+  "rollout_policy": "random",
+  "strategies": [
+    {
+      "strategy": "heuristic",
+      "matches": 45,
+      "p1_winrate": 1,
+      "p2_winrate": 0,
+      "draw_rate": 0,
+      "p1_win_indicator_variance": 0,
+      "average_turns_played": 11,
+      "average_history_entries": 87,
+      "action_distribution": {
+        "develop_ink": 0.2682926829268293,
+        "play_character": 0.21951219512195122,
+        "quest": 0.0975609756097561,
+        "sing_song": 0.04878048780487805,
+        "challenge": 0.12195121951219512,
+        "end_turn": 0.24390243902439024
+      }
+    },
+    {
+      "strategy": "ismcts",
+      "matches": 45,
+      "p1_winrate": 0.7777777777777778,
+      "p2_winrate": 0.17777777777777778,
+      "draw_rate": 0.044444444444444446,
+      "p1_win_indicator_variance": 0.1728395061728395,
+      "average_turns_played": 10.28888888888889,
+      "average_history_entries": 75.8,
+      "action_distribution": {
+        "develop_ink": 0.23684210526315788,
+        "play_character": 0.20657894736842106,
+        "quest": 0.18947368421052632,
+        "sing_song": 0.05855263157894737,
+        "challenge": 0.03355263157894737,
+        "end_turn": 0.275
+      }
+    }
+  ]
+}

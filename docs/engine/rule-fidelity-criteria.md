@@ -26,8 +26,8 @@ Referencias de tests: `backend/tests/test_engine_transitions.py` salvo que se in
 | Economía | `develop_ink` una vez por turno; tinta disponible al inicio de main | **P0** | Ritmo de juego y jugabilidad de personajes | `test_end_turn_refreshes_next_player_ink_and_turn_flags`, golden opening |
 | Personajes | `play_character` desde plantillas; coste en tinta; consume `hand_intents` alineado al arquetipo | **P0** | Define ramas legales y costes | `test_play_character_consumes_matching_hand_intent`, `test_legal_actions_include_multiple_play_templates_with_enough_ink`, `test_illegal_play_character_does_not_spend_ink_or_change_state` |
 | Tablero | `quest` requiere personaje listo; exert tras quest; lore por cantidad legal | **P0** | Principal fuente de lore en MVP | `test_quest_requires_ready_character_and_removes_quest_action_after_use`, `test_illegal_quest_amount_is_rejected` |
-| Combate | `challenge` simplificado: atacante listo vs **primer** personaje exerted rival; intercambio de daño y banish | **P0** | **Alto sesgo** si el juego real exige elegir objetivo | `test_challenge_banishes_opponent_exerted_character`, `test_challenge_resolves_damage_exchange_and_can_banish_both`, `test_golden_challenge_flow_damage_persists_across_turns` → ampliar cuando exista selección explícita (ISSUE-005) |
-| Canciones | `sing_song`: requiere intent `song`, personaje listo, tinta ≥ coste fijo del modelo | **P0** | Separar coste 0 vs pago es crítico en Lorcana real | `test_sing_song_requires_song_intent_and_consumes_it` → añadir casos gratis vs pago (ISSUE-006) |
+| Combate | `challenge`: atacante listo vs defensor exerted elegido por `defender_index` (indice en `opponent.battlefield`); intercambio de daño y banish | **P0** | Siguen simplificaciones vs juego real (orden de resolución, reglas de elegibilidad) | `test_challenge_banishes_opponent_exerted_character`, `test_challenge_resolves_damage_exchange_and_can_banish_both`, `test_golden_challenge_flow_damage_persists_across_turns`, `test_challenge_generates_one_legal_action_per_exerted_opponent_character`, `test_challenge_can_target_second_exerted_defender_only` |
+| Canciones | `sing_song`: dos modos en el modelo: **gratis** (`uses_singer=True`, `cost=0`, exige personaje listo y lo exert) o **pagado** (`uses_singer=False`, paga tinta y no exige personaje listo) | **P0** | Siguen simplificaciones del juego real (elegibilidad exacta de cantante y costes por carta), pero se elimina el sesgo de exigir siempre tinta+cantante | `test_sing_song_requires_song_intent_and_consumes_it`, `test_sing_song_paid_mode_does_not_require_ready_character`, `test_sing_song_free_mode_is_not_legal_without_ready_character`, `test_golden_mixed_line_quest_then_paid_song_without_ready_character` |
 | Turno / fases | `end_turn` cambia jugador activo; `turn_number` y `total_turns_taken`; fases ready → draw → main | **P1** | Orden temporal y robo | `test_end_turn_switches_active_player`, `test_first_player_skips_first_draw_step`, `test_golden_opening_flow_develop_play_quest` |
 | Estado bordo | Daño persiste; ready phase quita exert/summoning sick | **P1** | Combate multi-turno | `test_golden_challenge_flow_damage_persists_across_turns` |
 | Información oculta | Bonus de lore si `hidden_combo_potential` alto (modelo de creencia) | **P1** | Sesga valoraciones ISMCTS si mal calibrado | `test_hidden_combo_potential_can_grant_bonus_lore` |
@@ -36,10 +36,10 @@ Referencias de tests: `backend/tests/test_engine_transitions.py` salvo que se in
 
 ## Orden sugerido de implementación (Fase 1 engine)
 
-1. **P0 – Combate**: objetivo explícito en `ChallengeAction` y legalidad (ISSUE-005); goldens de doble challenge y daño acumulado (ROADMAP Fase 1.2).
-2. **P0 – Canciones**: coste 0 vs pago y condiciones de cantar gratis (ISSUE-006).
+1. **P0 – Combate**: completar reglas de targeting del juego real (prioridades/restricciones adicionales) sobre la base ya cubierta por goldens.
+2. **P0 – Canciones**: ampliar elegibilidad real de cantante/coste por carta y añadir golden de líneas mixtas quest+song.
 3. **P1 – Turnos**: alinear documentación/API de `turns_played` con `max_turns` (ya documentado en esquema OpenAPI y `simulate_simple_match`).
-4. **P1 – Bordes**: mano vacía, deck vacío, solo `end_turn` legal (ROADMAP Fase 1.2).
+4. **P1 – Bordes**: extender casos de estado límite más allá del baseline ya cubierto (mano/deck vacíos y solo `end_turn`).
 
 ## Uso del documento
 

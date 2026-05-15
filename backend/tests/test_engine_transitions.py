@@ -4,6 +4,7 @@ from src.domain.engine.actions import (
     EndTurnAction,
     PlayCharacterAction,
     QuestAction,
+    SingSongAction,
 )
 from src.domain.engine.fsm import CharacterInPlay, GameEngineFSM
 
@@ -107,7 +108,7 @@ def test_challenge_banishes_opponent_exerted_character() -> None:
     legal_action_types = {action.action_type for action in engine.get_legal_actions()}
     assert "challenge" in legal_action_types
 
-    engine.apply_action(ChallengeAction(player_id=1))
+    engine.apply_action(ChallengeAction(player_id=1, defender_index=0))
 
     p1 = engine.state.players[1]
     p2 = engine.state.players[2]
@@ -127,7 +128,7 @@ def test_challenge_resolves_damage_exchange_and_can_banish_both() -> None:
     GameEngineFSM._sync_board_counts(p1)
     GameEngineFSM._sync_board_counts(p2)
 
-    engine.apply_action(ChallengeAction(player_id=1))
+    engine.apply_action(ChallengeAction(player_id=1, defender_index=0))
 
     assert len(p1.battlefield) == 0
     assert len(p2.battlefield) == 0
@@ -209,14 +210,56 @@ def test_sing_song_requires_song_intent_and_consumes_it() -> None:
     engine._sync_hand_size(p1)
     GameEngineFSM._sync_board_counts(p1)
 
-    legal_types = {action.action_type for action in engine.get_legal_actions()}
-    assert "sing_song" in legal_types
+    song_actions = [action for action in engine.get_legal_actions() if isinstance(action, SingSongAction)]
+    assert len(song_actions) == 2
+    assert any(action.uses_singer and action.cost == 0 for action in song_actions)
+    assert any((not action.uses_singer) and action.cost == 1 for action in song_actions)
 
-    sing = next(action for action in engine.get_legal_actions() if action.action_type == "sing_song")
-    engine.apply_action(sing)
+    sing_free = next(action for action in song_actions if action.uses_singer)
+    engine.apply_action(sing_free)
 
     assert p1.hand_intents == []
     assert p1.lore == 1
+    assert p1.ink_available == 2
+    assert p1.board_exerted_characters == 1
+
+
+def test_sing_song_paid_mode_does_not_require_ready_character() -> None:
+    engine = GameEngineFSM(target_lore=10)
+    p1 = engine.state.players[1]
+    p1.battlefield = []
+    p1.ink_total = 2
+    p1.ink_available = 2
+    p1.hand_intents = ["song"]
+    engine._sync_hand_size(p1)
+    GameEngineFSM._sync_board_counts(p1)
+
+    song_actions = [action for action in engine.get_legal_actions() if isinstance(action, SingSongAction)]
+    assert len(song_actions) == 1
+    paid = song_actions[0]
+    assert paid.uses_singer is False
+    assert paid.cost == 1
+
+    engine.apply_action(paid)
+
+    assert p1.hand_intents == []
+    assert p1.lore == 1
+    assert p1.ink_available == 1
+    assert p1.board_exerted_characters == 0
+
+
+def test_sing_song_free_mode_is_not_legal_without_ready_character() -> None:
+    engine = GameEngineFSM(target_lore=10)
+    p1 = engine.state.players[1]
+    p1.battlefield = [CharacterInPlay(strength=2, willpower=2, exerted=True, summoning_sick=False)]
+    p1.ink_total = 0
+    p1.ink_available = 0
+    p1.hand_intents = ["song"]
+    engine._sync_hand_size(p1)
+    GameEngineFSM._sync_board_counts(p1)
+
+    song_actions = [action for action in engine.get_legal_actions() if isinstance(action, SingSongAction)]
+    assert song_actions == []
 
 
 def test_intent_profile_biases_initial_hand_generation() -> None:
@@ -283,7 +326,7 @@ def test_golden_challenge_flow_damage_persists_across_turns() -> None:
     GameEngineFSM._sync_board_counts(p1)
     GameEngineFSM._sync_board_counts(p2)
 
-    engine.apply_action(ChallengeAction(player_id=1))
+    engine.apply_action(ChallengeAction(player_id=1, defender_index=0))
 
     assert len(p1.battlefield) == 1
     assert p1.battlefield[0].damage == 1
@@ -300,3 +343,154 @@ def test_golden_challenge_flow_damage_persists_across_turns() -> None:
     assert p1.battlefield[0].exerted is False
     assert p1.battlefield[0].summoning_sick is False
     assert p1.board_ready_characters == 1
+
+
+def test_challenge_generates_one_legal_action_per_exerted_opponent_character() -> None:
+    engine = GameEngineFSM(target_lore=10)
+    _setup_p1_with_ready_character(engine)
+    p2 = engine.state.players[2]
+    p2.battlefield = [
+        CharacterInPlay(strength=1, willpower=20, exerted=True, summoning_sick=False),
+        CharacterInPlay(strength=1, willpower=20, exerted=True, summoning_sick=False),
+    ]
+    GameEngineFSM._sync_board_counts(p2)
+
+    legal = [action for action in engine.get_legal_actions() if isinstance(action, ChallengeAction)]
+    assert len(legal) == 2
+    assert {action.defender_index for action in legal} == {0, 1}
+
+
+def test_challenge_can_target_second_exerted_defender_only() -> None:
+    engine = GameEngineFSM(target_lore=10)
+    _setup_p1_with_ready_character(engine)
+    p1 = engine.state.players[1]
+    p2 = engine.state.players[2]
+    p2.battlefield = [
+        CharacterInPlay(strength=1, willpower=50, exerted=True, summoning_sick=False),
+        CharacterInPlay(strength=1, willpower=2, exerted=True, summoning_sick=False),
+    ]
+    GameEngineFSM._sync_board_counts(p2)
+
+    engine.apply_action(ChallengeAction(player_id=1, defender_index=1))
+
+    assert len(p2.battlefield) == 1
+    assert p2.battlefield[0].willpower == 50
+    assert p2.battlefield[0].damage == 0
+    assert len(p1.battlefield) == 1
+
+
+def test_challenge_out_of_range_defender_index_is_illegal() -> None:
+    engine = GameEngineFSM(target_lore=10)
+    _setup_p1_with_ready_character(engine)
+    p2 = engine.state.players[2]
+    p2.battlefield = [
+        CharacterInPlay(strength=2, willpower=2, exerted=True, summoning_sick=False),
+    ]
+    GameEngineFSM._sync_board_counts(p2)
+
+    engine.apply_action(ChallengeAction(player_id=1, defender_index=3))
+
+    assert any("illegal action" in entry.lower() for entry in engine.state.action_log)
+
+
+def test_challenge_no_legal_targets_when_opponent_has_only_ready_characters() -> None:
+    engine = GameEngineFSM(target_lore=10)
+    _setup_p1_with_ready_character(engine)
+    p2 = engine.state.players[2]
+    p2.battlefield = [
+        CharacterInPlay(strength=2, willpower=2, exerted=False, summoning_sick=False),
+    ]
+    GameEngineFSM._sync_board_counts(p2)
+
+    legal_types = {action.action_type for action in engine.get_legal_actions()}
+    assert "challenge" not in legal_types
+
+
+def test_golden_double_challenge_can_focus_same_defender_and_accumulate_damage() -> None:
+    engine = GameEngineFSM(target_lore=10)
+    _setup_p1_with_ready_character(engine)
+    p1 = engine.state.players[1]
+    p2 = engine.state.players[2]
+    p1.battlefield = [
+        CharacterInPlay(strength=2, willpower=2, damage=0, exerted=False, summoning_sick=False),
+        CharacterInPlay(strength=2, willpower=2, damage=0, exerted=False, summoning_sick=False),
+    ]
+    p2.battlefield = [CharacterInPlay(strength=1, willpower=3, damage=0, exerted=True, summoning_sick=False)]
+    GameEngineFSM._sync_board_counts(p1)
+    GameEngineFSM._sync_board_counts(p2)
+
+    engine.apply_action(ChallengeAction(player_id=1, defender_index=0))
+    engine.apply_action(ChallengeAction(player_id=1, defender_index=0))
+
+    assert len(p2.battlefield) == 0
+    assert len(p1.battlefield) == 2
+    assert all(character.damage == 1 for character in p1.battlefield)
+    assert p1.board_ready_characters == 0
+    assert p1.board_exerted_characters == 2
+
+
+def test_edge_only_end_turn_legal_when_hand_and_board_are_empty() -> None:
+    engine = GameEngineFSM(target_lore=10)
+    p1 = engine.state.players[1]
+    p2 = engine.state.players[2]
+    p1.hand_intents = []
+    p1.hand_size = 0
+    p1.deck_size = 0
+    p1.battlefield = []
+    p1.ink_total = 0
+    p1.ink_available = 0
+    p1.ink_played_this_turn = False
+    p2.battlefield = []
+    GameEngineFSM._sync_board_counts(p1)
+    GameEngineFSM._sync_board_counts(p2)
+
+    legal = engine.get_legal_actions()
+
+    assert len(legal) == 1
+    assert legal[0].action_type == "end_turn"
+
+
+def test_edge_deck_empty_logs_cannot_draw_on_turn_start() -> None:
+    engine = GameEngineFSM(target_lore=10)
+    p2 = engine.state.players[2]
+    p2.deck_size = 0
+    p2.hand_intents = []
+    p2.hand_size = 0
+
+    engine.apply_action(EndTurnAction(player_id=1))
+
+    assert engine.state.active_player_id == 2
+    assert any("cannot draw (deck is empty)" in line for line in engine.state.action_log)
+
+
+def test_golden_mixed_line_quest_then_paid_song_without_ready_character() -> None:
+    engine = GameEngineFSM(target_lore=10)
+    _setup_p1_with_ready_character(engine)
+    p1 = engine.state.players[1]
+    p2 = engine.state.players[2]
+
+    p1.battlefield = [CharacterInPlay(strength=2, willpower=2, damage=0, exerted=False, summoning_sick=False)]
+    p1.hand_intents = ["song"]
+    p1.ink_total = 1
+    p1.ink_available = 1
+    p2.battlefield = []
+    engine._sync_hand_size(p1)
+    GameEngineFSM._sync_board_counts(p1)
+    GameEngineFSM._sync_board_counts(p2)
+
+    engine.apply_action(QuestAction(player_id=1, amount=1))
+
+    song_actions = [action for action in engine.get_legal_actions() if isinstance(action, SingSongAction)]
+    assert len(song_actions) == 1
+    paid_song = song_actions[0]
+    assert paid_song.uses_singer is False
+    assert paid_song.cost == 1
+
+    engine.apply_action(paid_song)
+
+    assert p1.lore == 2
+    assert p1.hand_intents == []
+    assert p1.ink_available == 0
+    assert p1.board_ready_characters == 0
+    assert p1.board_exerted_characters == 1
+    assert any("paying 1 ink" in line for line in engine.state.action_log)

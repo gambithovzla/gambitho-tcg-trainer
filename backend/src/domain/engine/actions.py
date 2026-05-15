@@ -73,21 +73,33 @@ class QuestAction(GameAction):
 class SingSongAction(GameAction):
     cost: int = 1
     amount: int = 1
+    uses_singer: bool = True
 
-    def __init__(self, player_id: int, cost: int = 1, amount: int = 1):
+    def __init__(
+        self,
+        player_id: int,
+        cost: int = 1,
+        amount: int = 1,
+        uses_singer: bool = True,
+    ):
         object.__setattr__(self, "player_id", player_id)
         object.__setattr__(self, "action_type", "sing_song")
         object.__setattr__(self, "cost", cost)
         object.__setattr__(self, "amount", amount)
+        object.__setattr__(self, "uses_singer", uses_singer)
 
 
 @dataclass(frozen=True)
 class ChallengeAction(GameAction):
     """
     Simplified challenge abstraction:
-    one ready character challenges and banishes one exerted opposing character.
+    one ready character challenges one exerted opposing character chosen by
+    ``defender_index`` (index into the opponent's ``battlefield`` list).
     """
 
-    def __init__(self, player_id: int):
+    defender_index: int
+
+    def __init__(self, player_id: int, defender_index: int):
         object.__setattr__(self, "player_id", player_id)
         object.__setattr__(self, "action_type", "challenge")
+        object.__setattr__(self, "defender_index", defender_index)

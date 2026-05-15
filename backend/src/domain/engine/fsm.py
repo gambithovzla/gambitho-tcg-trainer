@@ -85,9 +85,14 @@ class GameEngineFSM:
         self,
         target_lore: int = 20,
         intent_weights_by_player: dict[int, dict[str, float]] | None = None,
+        starting_player_id: int = 1,
     ) -> None:
+        if starting_player_id not in (1, 2):
+            raise ValueError("starting_player_id must be 1 or 2.")
         self.state = GameState()
+        self.state.active_player_id = starting_player_id
         self.target_lore = target_lore
+        self._first_turn_player_id = starting_player_id
         self.bag = TheBag()
         self._intent_weights_by_player = self._build_intent_weights_by_player(intent_weights_by_player)
         self._initialize_player_hands()
@@ -106,14 +111,14 @@ class GameEngineFSM:
                 legal.append(QuestAction(player_id=active, amount=1))
             opponent_id = 1 if active == 2 else 2
             opponent = self.state.players[opponent_id]
-            if self._find_ready_character(player) is not None and self._find_exerted_character(opponent) is not None:
-                legal.append(ChallengeAction(player_id=active))
-            if (
-                player.ink_available >= 1
-                and self._find_ready_character(player) is not None
-                and "song" in player.hand_intents
-            ):
-                legal.append(SingSongAction(player_id=active, cost=1, amount=1))
+            if self._find_ready_character(player) is not None:
+                for defender_index in self._exerted_battlefield_indices(opponent):
+                    legal.append(ChallengeAction(player_id=active, defender_index=defender_index))
+            if "song" in player.hand_intents:
+                if self._find_ready_character(player) is not None:
+                    legal.append(SingSongAction(player_id=active, cost=0, amount=1, uses_singer=True))
+                if player.ink_available >= 1:
+                    legal.append(SingSongAction(player_id=active, cost=1, amount=1, uses_singer=False))
         legal.append(EndTurnAction(player_id=active))
         return legal
 
@@ -191,24 +196,30 @@ class GameEngineFSM:
         elif isinstance(action, SingSongAction):
             player = self.state.players[action.player_id]
             self._ensure_hand_intents_consistency(player)
-            singer = self._find_ready_character(player)
-            if singer is None:
-                self.state.action_log.append(f"P{action.player_id} cannot sing song (no ready characters).")
-                return
             if "song" not in player.hand_intents:
                 self.state.action_log.append(f"P{action.player_id} cannot sing song (no song intent in hand).")
                 return
+            singer: CharacterInPlay | None = None
+            if action.uses_singer:
+                singer = self._find_ready_character(player)
+                if singer is None:
+                    self.state.action_log.append(
+                        f"P{action.player_id} cannot sing song for free (no ready characters)."
+                    )
+                    return
             if not self._spend_ink(action.player_id, amount=action.cost):
                 self.state.action_log.append(
                     f"P{action.player_id} cannot sing song now (insufficient ink)."
                 )
                 return
             self._remove_one_intent(player=player, intent="song")
-            singer.exerted = True
+            if singer is not None:
+                singer.exerted = True
             player.lore += action.amount
             self._sync_board_counts(player)
+            mode = "for free" if action.uses_singer else f"paying {action.cost} ink"
             self.state.action_log.append(
-                f"P{action.player_id} sings a song for {action.amount} lore (total={player.lore})."
+                f"P{action.player_id} sings a song {mode} for {action.amount} lore (total={player.lore})."
             )
             self._enqueue_after_lore_gain(action.player_id)
             self._resolve_the_bag()
@@ -222,10 +233,16 @@ class GameEngineFSM:
             if attacker is None:
                 self.state.action_log.append(f"P{action.player_id} cannot challenge (no ready characters).")
                 return
-            defender = self._find_exerted_character(opponent)
-            if defender is None:
+            idx = action.defender_index
+            if idx < 0 or idx >= len(opponent.battlefield):
                 self.state.action_log.append(
-                    f"P{action.player_id} cannot challenge (opponent has no exerted characters)."
+                    f"P{action.player_id} cannot challenge (invalid defender index {idx})."
+                )
+                return
+            defender = opponent.battlefield[idx]
+            if not defender.exerted:
+                self.state.action_log.append(
+                    f"P{action.player_id} cannot challenge (defender at index {idx} is not exerted)."
                 )
                 return
 
@@ -242,7 +259,7 @@ class GameEngineFSM:
             self._sync_board_counts(opponent)
             self.state.action_log.append(
                 (
-                    f"P{action.player_id} challenges P{opponent_id}: "
+                    f"P{action.player_id} challenges P{opponent_id} defender[{idx}]: "
                     f"attacker {attacker.strength}/{attacker.willpower} vs "
                     f"defender {defender.strength}/{defender.willpower}."
                 )
@@ -283,7 +300,7 @@ class GameEngineFSM:
         )
 
         self.state.phase = "draw"
-        should_draw = not (self.state.turn_number == 1 and player_id == 1)
+        should_draw = not (self.state.turn_number == 1 and player_id == self._first_turn_player_id)
         if should_draw:
             if player.deck_size > 0:
                 player.deck_size -= 1
@@ -295,7 +312,7 @@ class GameEngineFSM:
             else:
                 self.state.action_log.append(f"P{player_id} cannot draw (deck is empty).")
         else:
-            self.state.action_log.append("P1 skips draw on the first turn.")
+            self.state.action_log.append(f"P{self._first_turn_player_id} skips draw on the first turn.")
 
         self.state.phase = "main"
         player.ink_available = player.ink_total
@@ -444,11 +461,8 @@ class GameEngineFSM:
         return None
 
     @staticmethod
-    def _find_exerted_character(player: PlayerState) -> CharacterInPlay | None:
-        for character in player.battlefield:
-            if character.exerted:
-                return character
-        return None
+    def _exerted_battlefield_indices(player: PlayerState) -> list[int]:
+        return [index for index, character in enumerate(player.battlefield) if character.exerted]
 
     @staticmethod
     def _sync_board_counts(player: PlayerState) -> None:

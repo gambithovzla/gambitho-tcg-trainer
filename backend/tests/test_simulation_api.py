@@ -323,6 +323,60 @@ def test_intent_profile_endpoint_returns_weights_and_metadata() -> None:
     assert body["strict_validation"] == []
 
 
+def test_intent_profile_endpoint_strict_golden_contract_snapshot() -> None:
+    payload = {
+        "strict": True,
+        "deck": [
+            {"card_id": "song_hint", "copies": 4, "card_type": "Song", "subtypes": ["Song"]},
+            {
+                "card_id": "char_hint",
+                "copies": 4,
+                "card_type": "Character",
+                "cost": 3,
+                "strength": 2,
+                "willpower": 3,
+                "lore": 1,
+            },
+        ],
+    }
+    response = client.post("/simulate/intent-profile", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    expected_keys = {
+        "weights",
+        "cards_seen",
+        "cards_matched_catalog",
+        "source",
+        "strict_validation",
+    }
+    assert expected_keys.issubset(body.keys())
+    assert body["cards_seen"] == 2
+    assert body["cards_matched_catalog"] >= 0
+    assert body["source"] in {"input_only", "catalog+input", "none"}
+
+    weights = body["weights"]
+    assert set(weights.keys()) == {"tempo", "aggressive", "quester", "defender", "song"}
+    assert abs(sum(weights.values()) - 1.0) < 1e-6
+    assert all(value >= 0.0 for value in weights.values())
+
+    assert isinstance(body["strict_validation"], list)
+    assert len(body["strict_validation"]) == 1
+    entry = body["strict_validation"][0]
+    assert set(entry.keys()) == {
+        "actor",
+        "hinted_cards",
+        "matched_catalog_cards",
+        "total_cards",
+        "source",
+    }
+    assert entry["actor"] == "intent_profile"
+    assert entry["hinted_cards"] == 2
+    assert entry["total_cards"] == 2
+    assert entry["matched_catalog_cards"] >= 0
+    assert entry["source"] in {"input_only", "catalog+input", "none"}
+
+
 def test_intent_profile_endpoint_strict_rejects_weak_hints() -> None:
     payload = {
         "strict": True,

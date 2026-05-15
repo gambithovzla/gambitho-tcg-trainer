@@ -1,0 +1,33 @@
+{
+  "seeds": [
+    7,
+    11,
+    19,
+    23,
+    29
+  ],
+  "matches_per_seed": 30,
+  "max_turns": 12,
+  "target_lore": 8,
+  "ismcts_iterations": 32,
+  "strategies": [
+    {
+      "strategy": "ismcts",
+      "matches": 150,
+      "p1_winrate": 0.5733333333333334,
+      "p2_winrate": 0.2,
+      "draw_rate": 0.22666666666666666,
+      "p1_win_indicator_variance": 0.2446222222222222,
+      "average_turns_played": 10.986666666666666,
+      "average_history_entries": 78.48666666666666,
+      "action_distribution": {
+        "develop_ink": 0.2431966270601763,
+        "play_character": 0.2012265235722499,
+        "quest": 0.1766960521272518,
+        "sing_song": 0.05557684936757378,
+        "challenge": 0.03622077424300498,
+        "end_turn": 0.28708317362974317
+      }
+    }
+  ]
+}

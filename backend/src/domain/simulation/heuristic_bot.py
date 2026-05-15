@@ -19,6 +19,7 @@ class MatchResult:
     winner_player_id: int | None
     turns_played: int
     history: list[str]
+    starting_player_id: int
 
 
 class HeuristicBot:
@@ -49,9 +50,19 @@ class HeuristicBot:
         return legal_actions[0]
 
 
-def _build_bot(strategy: str, ismcts_iterations: int):
+def _build_bot(
+    strategy: str,
+    ismcts_iterations: int,
+    rng_seed: int | None = None,
+    rollout_policy: str = "random",
+):
     if strategy == "ismcts":
-        return ISMCTSBot(iterations=ismcts_iterations, rollout_depth=24)
+        return ISMCTSBot(
+            iterations=ismcts_iterations,
+            rollout_depth=24,
+            rng_seed=rng_seed,
+            rollout_policy=rollout_policy,
+        )
     return HeuristicBot()
 
 
@@ -72,6 +83,9 @@ def simulate_simple_match(
     player_one_intent_weights: dict[str, float] | None = None,
     player_two_intent_weights: dict[str, float] | None = None,
     opponent_intent_weights: dict[str, float] | None = None,
+    rng_seed: int | None = None,
+    rollout_policy: str = "random",
+    starting_player_id: int = 1,
 ) -> MatchResult:
     """Run a full match until a lore win or the turn budget is exhausted.
 
@@ -86,9 +100,22 @@ def simulate_simple_match(
     engine = GameEngineFSM(
         target_lore=target_lore,
         intent_weights_by_player=intent_weights_by_player,
+        starting_player_id=starting_player_id,
     )
-    bot_1 = _build_bot(strategy=strategy, ismcts_iterations=ismcts_iterations)
-    bot_2 = _build_bot(strategy=strategy, ismcts_iterations=ismcts_iterations)
+    bot_1_seed = None if rng_seed is None else rng_seed
+    bot_2_seed = None if rng_seed is None else rng_seed + 1
+    bot_1 = _build_bot(
+        strategy=strategy,
+        ismcts_iterations=ismcts_iterations,
+        rng_seed=bot_1_seed,
+        rollout_policy=rollout_policy,
+    )
+    bot_2 = _build_bot(
+        strategy=strategy,
+        ismcts_iterations=ismcts_iterations,
+        rng_seed=bot_2_seed,
+        rollout_policy=rollout_policy,
+    )
     bots = {1: bot_1, 2: bot_2}
 
     while engine.state.winner_player_id is None and engine.state.turn_number <= max_turns:
@@ -123,4 +150,5 @@ def simulate_simple_match(
         winner_player_id=engine.state.winner_player_id,
         turns_played=engine.state.turn_number,
         history=engine.state.action_log,
+        starting_player_id=starting_player_id,
     )

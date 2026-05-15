@@ -9,7 +9,7 @@ Plan de continuidad para llevar `gambitho-tcg-trainer` desde MVP tecnico a v1 ut
 - Linter/reparacion de mazos operativo.
 - Simulacion con `heuristic` e `ismcts` base disponible via API.
 - Strict mode de intents implementado y documentado (incluye `contract_version: "1"` en errores).
-- Test suite backend estable: `68 passed`.
+- Test suite backend estable: `86 passed`.
 
 ## Fase 1 - Simulator confiable (prioridad alta)
 
@@ -70,9 +70,8 @@ Definition of Done Fase 3:
 
 ## Backlog inmediato (siguiente sesion)
 
-1. **ISSUE-005:** Target explicito en `ChallengeAction` + goldens de combate (ver `docs/engine/rule-fidelity-criteria.md`).
-2. **ISSUE-006:** Reglas de song (gratis vs pago) + tests.
-3. Ampliar goldens de engine (doble challenge, bordes mano/deck vacios) segun Fase 1.2 del roadmap.
+1. Diseñar `guided_v2` (rollout policy) con foco explicito en reducir sesgo P1 sin aumentar draws.
+2. Correr A/B (`random` vs `guided_v2`) en modo espejo como criterio de aceptacion.
 
 ## Issue list (lista operativa)
 
@@ -140,6 +139,8 @@ Tareas:
 - Ajustar legalidad y aplicacion de dano/banish.
 - Agregar tests de seleccion de objetivo y regresion.
 
+**Estado:** `ChallengeAction(defender_index)` y una acción legal por defensor exerted; ver tests en `test_engine_transitions.py`.
+
 Criterio de cierre:
 - API interna del engine soporta target explicito y tests de combate cubren el flujo.
 
@@ -153,9 +154,11 @@ Tareas:
 - Actualizar acciones legales y resolucion de `SingSongAction`.
 - Añadir tests de casos permitidos/no permitidos.
 
+**Estado:** `SingSongAction` soporta `uses_singer` con dos rutas legales (`cost=0` gratis con singer listo, `cost=1` pagada sin singer), con cobertura dedicada en `test_engine_transitions.py`.
+
 Criterio de cierre:
 - Reglas de song coherentes, testeadas y sin regresiones.
 
 ## Prompt sugerido para retomar
 
-"Continuemos con Fase 1 del `ROADMAP.md`: ISSUE-005 (seleccion explicita de objetivo en challenge) siguiendo `docs/engine/rule-fidelity-criteria.md`."
+"Continuemos con Fase 2 del `ROADMAP.md`: implementar `guided_v2` y compararlo en benchmark espejo contra `random`."
