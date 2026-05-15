@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import copy
 
 from src.domain.engine.actions import EndTurnAction, GainLoreAction, GameAction
 from src.domain.engine.the_bag import TheBag, TriggerEvent
@@ -8,6 +9,8 @@ from src.domain.engine.the_bag import TheBag, TriggerEvent
 class PlayerState:
     player_id: int
     lore: int = 0
+    hidden_hand_size: int = 0
+    hidden_combo_potential: float = 0.0
 
 
 @dataclass
@@ -37,6 +40,12 @@ class GameEngineFSM:
             EndTurnAction(player_id=active),
         ]
 
+    def clone(self) -> "GameEngineFSM":
+        cloned = GameEngineFSM(target_lore=self.target_lore)
+        cloned.state = copy.deepcopy(self.state)
+        cloned.bag = self.bag.clone()
+        return cloned
+
     def apply_action(self, action: GameAction) -> None:
         if self.state.winner_player_id is not None:
             return
@@ -47,6 +56,7 @@ class GameEngineFSM:
             self.state.action_log.append(
                 f"P{action.player_id} gains {action.amount} lore (total={player.lore})."
             )
+            self._apply_hidden_combo_bonus(action.player_id)
             self._enqueue_after_lore_gain(action.player_id)
             self._resolve_the_bag()
             self._check_win_condition()
@@ -76,6 +86,14 @@ class GameEngineFSM:
                 break
             self.state.action_log.append(
                 f"Resolve trigger '{event.trigger_id}' for P{event.owner_player_id}."
+            )
+
+    def _apply_hidden_combo_bonus(self, player_id: int) -> None:
+        player = self.state.players[player_id]
+        if player.hidden_combo_potential >= 0.75:
+            player.lore += 1
+            self.state.action_log.append(
+                f"P{player_id} gains 1 bonus lore from sampled hidden combo potential."
             )
 
     def _check_win_condition(self) -> None:

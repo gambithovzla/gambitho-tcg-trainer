@@ -108,3 +108,16 @@ class PostgresCardRepository:
             conn.commit()
 
         return len(cards)
+
+    def get_existing_card_ids(self, card_ids: list[str]) -> set[str]:
+        if not card_ids:
+            return set()
+
+        with psycopg.connect(self._dsn) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT uuid FROM dim_card_core WHERE uuid = ANY(%s)",
+                    (card_ids,),
+                )
+                rows = cur.fetchall()
+        return {row[0] for row in rows}

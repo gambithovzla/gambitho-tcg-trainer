@@ -6,6 +6,7 @@ __pycache__/
 .python-version
 .venv/
 venv/
+*.egg-info/
 
 # Tooling and tests
 .pytest_cache/

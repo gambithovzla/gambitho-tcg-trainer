@@ -17,6 +17,11 @@ class TheBag:
     def __init__(self) -> None:
         self._events: list[TriggerEvent] = []
 
+    def clone(self) -> "TheBag":
+        copied = TheBag()
+        copied.add_many(list(self._events))
+        return copied
+
     def add(self, event: TriggerEvent) -> None:
         self._events.append(event)
 

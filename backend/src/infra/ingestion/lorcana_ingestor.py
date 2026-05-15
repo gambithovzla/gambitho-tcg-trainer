@@ -49,6 +49,24 @@ class LorcanaIngestor:
             return [str(item) for item in value if item is not None]
         return [str(value)]
 
+    @staticmethod
+    def extract_cards(payload: dict | list) -> list[dict]:
+        """
+        Normalizes common provider response shapes to a plain list of card dicts.
+        Accepted shapes:
+        - list[dict]
+        - {"cards": list[dict]}
+        - {"data": list[dict]}
+        """
+        if isinstance(payload, list):
+            return [item for item in payload if isinstance(item, dict)]
+        if isinstance(payload, dict):
+            for key in ("cards", "data"):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    return [item for item in value if isinstance(item, dict)]
+        return []
+
     def ingest_from_payload(self, payload: list[dict]) -> IngestionSummary:
         normalized_cards: list[dict] = []
         sql_records: list[CardRecord] = []

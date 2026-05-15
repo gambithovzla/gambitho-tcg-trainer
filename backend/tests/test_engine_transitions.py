@@ -17,3 +17,12 @@ def test_end_turn_switches_active_player() -> None:
     engine.apply_action(EndTurnAction(player_id=1))
 
     assert engine.state.active_player_id == 2
+
+
+def test_hidden_combo_potential_can_grant_bonus_lore() -> None:
+    engine = GameEngineFSM()
+    engine.state.players[1].hidden_combo_potential = 0.9
+
+    engine.apply_action(GainLoreAction(player_id=1, amount=1))
+
+    assert engine.state.players[1].lore == 2
