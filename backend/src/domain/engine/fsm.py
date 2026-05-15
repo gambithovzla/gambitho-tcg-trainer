@@ -1,8 +1,34 @@
 from dataclasses import dataclass, field
 import copy
 
-from src.domain.engine.actions import EndTurnAction, GainLoreAction, GameAction
+from src.domain.engine.actions import (
+    ChallengeAction,
+    DevelopInkAction,
+    EndTurnAction,
+    GameAction,
+    PlayCharacterAction,
+    QuestAction,
+    SingSongAction,
+)
 from src.domain.engine.the_bag import TheBag, TriggerEvent
+
+
+@dataclass
+class CharacterInPlay:
+    strength: int = 2
+    willpower: int = 2
+    lore_value: int = 1
+    damage: int = 0
+    exerted: bool = False
+    summoning_sick: bool = True
+
+    @property
+    def is_banished(self) -> bool:
+        return self.damage >= self.willpower
+
+    @property
+    def is_ready_for_actions(self) -> bool:
+        return not self.exerted and not self.summoning_sick
 
 
 @dataclass
@@ -11,12 +37,24 @@ class PlayerState:
     lore: int = 0
     hidden_hand_size: int = 0
     hidden_combo_potential: float = 0.0
+    hand_intents: list[str] = field(default_factory=list)
+    hand_size: int = 7
+    deck_size: int = 53
+    battlefield: list[CharacterInPlay] = field(default_factory=list)
+    board_ready_characters: int = 0
+    board_exerted_characters: int = 0
+    board_fresh_characters: int = 0
+    ink_total: int = 0
+    ink_available: int = 0
+    ink_played_this_turn: bool = False
 
 
 @dataclass
 class GameState:
     active_player_id: int = 1
     turn_number: int = 1
+    phase: str = "main"
+    total_turns_taken: int = 0
     players: dict[int, PlayerState] = field(
         default_factory=lambda: {
             1: PlayerState(player_id=1),
@@ -28,17 +66,55 @@ class GameState:
 
 
 class GameEngineFSM:
+    CHARACTER_TEMPLATES: tuple[dict[str, int | str], ...] = (
+        {"archetype": "tempo", "cost": 2, "strength": 2, "willpower": 2, "lore_value": 1},
+        {"archetype": "aggressive", "cost": 3, "strength": 3, "willpower": 2, "lore_value": 1},
+        {"archetype": "quester", "cost": 3, "strength": 2, "willpower": 3, "lore_value": 2},
+        {"archetype": "defender", "cost": 4, "strength": 2, "willpower": 4, "lore_value": 1},
+    )
+    DRAW_INTENT_CYCLE: tuple[str, ...] = (
+        "tempo",
+        "song",
+        "aggressive",
+        "quester",
+        "tempo",
+        "defender",
+        "song",
+        "aggressive",
+        "quester",
+        "tempo",
+    )
+
     def __init__(self, target_lore: int = 20) -> None:
         self.state = GameState()
         self.target_lore = target_lore
         self.bag = TheBag()
+        self._initialize_player_hands()
+        self._start_turn(player_id=self.state.active_player_id)
 
     def get_legal_actions(self) -> list[GameAction]:
         active = self.state.active_player_id
-        return [
-            GainLoreAction(player_id=active, amount=1),
-            EndTurnAction(player_id=active),
-        ]
+        player = self.state.players[active]
+        self._ensure_hand_intents_consistency(player)
+        legal: list[GameAction] = []
+        if self.state.phase == "main":
+            if not player.ink_played_this_turn and player.hand_size > 0:
+                legal.append(DevelopInkAction(player_id=active))
+            legal.extend(self._playable_character_options(player_id=active))
+            if self._find_ready_character(player) is not None:
+                legal.append(QuestAction(player_id=active, amount=1))
+            opponent_id = 1 if active == 2 else 2
+            opponent = self.state.players[opponent_id]
+            if self._find_ready_character(player) is not None and self._find_exerted_character(opponent) is not None:
+                legal.append(ChallengeAction(player_id=active))
+            if (
+                player.ink_available >= 1
+                and self._find_ready_character(player) is not None
+                and "song" in player.hand_intents
+            ):
+                legal.append(SingSongAction(player_id=active, cost=1, amount=1))
+        legal.append(EndTurnAction(player_id=active))
+        return legal
 
     def clone(self) -> "GameEngineFSM":
         cloned = GameEngineFSM(target_lore=self.target_lore)
@@ -49,22 +125,292 @@ class GameEngineFSM:
     def apply_action(self, action: GameAction) -> None:
         if self.state.winner_player_id is not None:
             return
+        if action.player_id != self.state.active_player_id:
+            return
 
-        if isinstance(action, GainLoreAction):
+        if isinstance(action, DevelopInkAction):
+            self._develop_ink(action.player_id)
+
+        elif isinstance(action, PlayCharacterAction):
+            if not self._spend_ink(action.player_id, amount=action.cost):
+                self.state.action_log.append(f"P{action.player_id} cannot play character now.")
+                return
             player = self.state.players[action.player_id]
-            player.lore += action.amount
+            self._ensure_hand_intents_consistency(player)
+            if player.hand_size <= 0:
+                self.state.action_log.append(f"P{action.player_id} cannot play character (no cards in hand).")
+                return
+            if not self._remove_one_intent(player=player, intent=action.archetype):
+                self.state.action_log.append(
+                    f"P{action.player_id} cannot play {action.archetype} character (not in hand intents)."
+                )
+                return
+            player.battlefield.append(
+                CharacterInPlay(
+                    strength=max(1, action.strength),
+                    willpower=max(1, action.willpower),
+                    lore_value=max(1, action.lore_value),
+                )
+            )
+            self._sync_board_counts(player)
             self.state.action_log.append(
-                f"P{action.player_id} gains {action.amount} lore (total={player.lore})."
+                (
+                    f"P{action.player_id} plays a {action.archetype} character "
+                    f"({action.strength}/{action.willpower}, lore={action.lore_value}, "
+                    f"fresh={player.board_fresh_characters})."
+                )
+            )
+
+        elif isinstance(action, QuestAction):
+            player = self.state.players[action.player_id]
+            attacker = self._find_ready_character(player)
+            if attacker is None:
+                self.state.action_log.append(f"P{action.player_id} cannot quest (no ready characters).")
+                return
+            attacker.exerted = True
+            lore_gained = max(1, attacker.lore_value) * max(1, action.amount)
+            player.lore += lore_gained
+            self._sync_board_counts(player)
+            self.state.action_log.append(
+                f"P{action.player_id} quests for {lore_gained} lore (total={player.lore})."
             )
             self._apply_hidden_combo_bonus(action.player_id)
             self._enqueue_after_lore_gain(action.player_id)
             self._resolve_the_bag()
             self._check_win_condition()
 
+        elif isinstance(action, SingSongAction):
+            player = self.state.players[action.player_id]
+            self._ensure_hand_intents_consistency(player)
+            singer = self._find_ready_character(player)
+            if singer is None:
+                self.state.action_log.append(f"P{action.player_id} cannot sing song (no ready characters).")
+                return
+            if "song" not in player.hand_intents:
+                self.state.action_log.append(f"P{action.player_id} cannot sing song (no song intent in hand).")
+                return
+            if not self._spend_ink(action.player_id, amount=action.cost):
+                self.state.action_log.append(
+                    f"P{action.player_id} cannot sing song now (insufficient ink)."
+                )
+                return
+            self._remove_one_intent(player=player, intent="song")
+            singer.exerted = True
+            player.lore += action.amount
+            self._sync_board_counts(player)
+            self.state.action_log.append(
+                f"P{action.player_id} sings a song for {action.amount} lore (total={player.lore})."
+            )
+            self._enqueue_after_lore_gain(action.player_id)
+            self._resolve_the_bag()
+            self._check_win_condition()
+
+        elif isinstance(action, ChallengeAction):
+            player = self.state.players[action.player_id]
+            opponent_id = 1 if action.player_id == 2 else 2
+            opponent = self.state.players[opponent_id]
+            attacker = self._find_ready_character(player)
+            if attacker is None:
+                self.state.action_log.append(f"P{action.player_id} cannot challenge (no ready characters).")
+                return
+            defender = self._find_exerted_character(opponent)
+            if defender is None:
+                self.state.action_log.append(
+                    f"P{action.player_id} cannot challenge (opponent has no exerted characters)."
+                )
+                return
+
+            attacker.exerted = True
+            defender.damage += attacker.strength
+            attacker.damage += defender.strength
+            attacker_banished = attacker.is_banished
+            defender_banished = defender.is_banished
+            if attacker_banished:
+                player.battlefield.remove(attacker)
+            if defender_banished:
+                opponent.battlefield.remove(defender)
+            self._sync_board_counts(player)
+            self._sync_board_counts(opponent)
+            self.state.action_log.append(
+                (
+                    f"P{action.player_id} challenges P{opponent_id}: "
+                    f"attacker {attacker.strength}/{attacker.willpower} vs "
+                    f"defender {defender.strength}/{defender.willpower}."
+                )
+            )
+            if attacker_banished:
+                self.state.action_log.append(f"P{action.player_id}'s attacker is banished.")
+            if defender_banished:
+                self.state.action_log.append(f"P{opponent_id}'s defender is banished.")
+
         elif isinstance(action, EndTurnAction):
+            self.state.phase = "end"
             self.state.action_log.append(f"P{action.player_id} ends turn.")
+            self.state.total_turns_taken += 1
             self.state.active_player_id = 1 if action.player_id == 2 else 2
             self.state.turn_number += 1
+            self._start_turn(player_id=self.state.active_player_id)
+
+    def _start_turn(self, player_id: int) -> None:
+        self.state.phase = "ready"
+        player = self.state.players[player_id]
+        for character in player.battlefield:
+            character.exerted = False
+            character.summoning_sick = False
+        self._sync_board_counts(player)
+
+        self.state.action_log.append(
+            f"Ready phase for P{player_id} on turn {self.state.turn_number} (ready_chars={player.board_ready_characters})."
+        )
+
+        self.state.phase = "draw"
+        should_draw = not (self.state.turn_number == 1 and player_id == 1)
+        if should_draw:
+            if player.deck_size > 0:
+                player.deck_size -= 1
+                player.hand_intents.append(self._next_draw_intent(player_id, player.deck_size))
+                self._sync_hand_size(player)
+                self.state.action_log.append(
+                    f"P{player_id} draws a card (hand={player.hand_size}, deck={player.deck_size})."
+                )
+            else:
+                self.state.action_log.append(f"P{player_id} cannot draw (deck is empty).")
+        else:
+            self.state.action_log.append("P1 skips draw on the first turn.")
+
+        self.state.phase = "main"
+        player.ink_available = player.ink_total
+        player.ink_played_this_turn = False
+        self.state.action_log.append(
+            f"Main phase start for P{player_id} (ink={player.ink_available})."
+        )
+
+    def _develop_ink(self, player_id: int) -> None:
+        player = self.state.players[player_id]
+        self._ensure_hand_intents_consistency(player)
+        if player.ink_played_this_turn:
+            self.state.action_log.append(f"P{player_id} already developed ink this turn.")
+            return
+        if player.hand_size <= 0:
+            self.state.action_log.append(f"P{player_id} cannot develop ink (no cards in hand).")
+            return
+        self._remove_preferred_ink_intent(player)
+        player.ink_total += 1
+        player.ink_available += 1
+        player.ink_played_this_turn = True
+        self.state.action_log.append(
+            f"P{player_id} develops ink (total={player.ink_total}, available={player.ink_available}, hand={player.hand_size})."
+        )
+
+    def _playable_character_options(self, player_id: int) -> list[PlayCharacterAction]:
+        player = self.state.players[player_id]
+        self._ensure_hand_intents_consistency(player)
+        if player.hand_size <= 0:
+            return []
+        character_templates_by_name = {
+            str(template["archetype"]): template for template in self.CHARACTER_TEMPLATES
+        }
+        options: list[PlayCharacterAction] = []
+        seen_intents: set[str] = set()
+        for intent in player.hand_intents:
+            if intent in seen_intents:
+                continue
+            seen_intents.add(intent)
+            template = character_templates_by_name.get(intent)
+            if template is None:
+                continue
+            cost = int(template["cost"])
+            if player.ink_available < cost:
+                continue
+            options.append(
+                PlayCharacterAction(
+                    player_id=player_id,
+                    cost=cost,
+                    strength=int(template["strength"]),
+                    willpower=int(template["willpower"]),
+                    lore_value=int(template["lore_value"]),
+                    archetype=str(template["archetype"]),
+                )
+            )
+        return options
+
+    def _initialize_player_hands(self) -> None:
+        for player_id, player in self.state.players.items():
+            player.hand_intents = [
+                self.DRAW_INTENT_CYCLE[(index + player_id - 1) % len(self.DRAW_INTENT_CYCLE)]
+                for index in range(player.hand_size)
+            ]
+            self._sync_hand_size(player)
+
+    def _next_draw_intent(self, player_id: int, current_deck_size: int) -> str:
+        # Deterministic pseudo-deck draw from a fixed cycle.
+        cycle_index = (player_id * 11 + current_deck_size) % len(self.DRAW_INTENT_CYCLE)
+        return self.DRAW_INTENT_CYCLE[cycle_index]
+
+    @staticmethod
+    def _sync_hand_size(player: PlayerState) -> None:
+        player.hand_size = len(player.hand_intents)
+
+    def _ensure_hand_intents_consistency(self, player: PlayerState) -> None:
+        if len(player.hand_intents) < player.hand_size:
+            missing = player.hand_size - len(player.hand_intents)
+            player.hand_intents.extend(["tempo"] * missing)
+        elif len(player.hand_intents) > player.hand_size:
+            player.hand_intents = player.hand_intents[: player.hand_size]
+        self._sync_hand_size(player)
+
+    @staticmethod
+    def _remove_one_intent(player: PlayerState, intent: str) -> bool:
+        for index, candidate in enumerate(player.hand_intents):
+            if candidate == intent:
+                del player.hand_intents[index]
+                player.hand_size = len(player.hand_intents)
+                return True
+        return False
+
+    def _remove_preferred_ink_intent(self, player: PlayerState) -> None:
+        for preferred in ("defender", "tempo", "aggressive", "quester", "song"):
+            if self._remove_one_intent(player, preferred):
+                return
+
+    @staticmethod
+    def _find_ready_character(player: PlayerState) -> CharacterInPlay | None:
+        for character in player.battlefield:
+            if character.is_ready_for_actions:
+                return character
+        return None
+
+    @staticmethod
+    def _find_exerted_character(player: PlayerState) -> CharacterInPlay | None:
+        for character in player.battlefield:
+            if character.exerted:
+                return character
+        return None
+
+    @staticmethod
+    def _sync_board_counts(player: PlayerState) -> None:
+        ready = 0
+        exerted = 0
+        fresh = 0
+        for character in player.battlefield:
+            if character.summoning_sick:
+                fresh += 1
+            elif character.exerted:
+                exerted += 1
+            else:
+                ready += 1
+        player.board_ready_characters = ready
+        player.board_exerted_characters = exerted
+        player.board_fresh_characters = fresh
+
+    def _spend_ink(self, player_id: int, amount: int) -> bool:
+        player = self.state.players[player_id]
+        if amount <= 0:
+            return True
+        if player.ink_available < amount:
+            return False
+        player.ink_available -= amount
+        return True
 
     def _enqueue_after_lore_gain(self, player_id: int) -> None:
         self.bag.add(

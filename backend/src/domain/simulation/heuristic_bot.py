@@ -1,6 +1,14 @@
 from dataclasses import dataclass
 
-from src.domain.engine.actions import EndTurnAction, GainLoreAction, GameAction
+from src.domain.engine.actions import (
+    ChallengeAction,
+    DevelopInkAction,
+    EndTurnAction,
+    GameAction,
+    PlayCharacterAction,
+    QuestAction,
+    SingSongAction,
+)
 from src.domain.engine.fsm import GameEngineFSM
 from src.domain.simulation.determinization import DeterminizationContext
 from src.domain.simulation.ismcts import ISMCTSBot
@@ -14,11 +22,26 @@ class MatchResult:
 
 
 class HeuristicBot:
-    """Simple policy: gain lore, then end turn."""
+    """Simple policy: develop ink, play character, challenge, quest, sing song, then end turn."""
 
     def choose_action(self, legal_actions: list[GameAction]) -> GameAction:
         for action in legal_actions:
-            if isinstance(action, GainLoreAction):
+            if isinstance(action, DevelopInkAction):
+                return action
+        play_options = [action for action in legal_actions if isinstance(action, PlayCharacterAction)]
+        if play_options:
+            return max(
+                play_options,
+                key=lambda action: (2 * action.lore_value + action.strength + action.willpower - action.cost),
+            )
+        for action in legal_actions:
+            if isinstance(action, ChallengeAction):
+                return action
+        for action in legal_actions:
+            if isinstance(action, QuestAction):
+                return action
+        for action in legal_actions:
+            if isinstance(action, SingSongAction):
                 return action
         for action in legal_actions:
             if isinstance(action, EndTurnAction):
@@ -40,6 +63,12 @@ def simulate_simple_match(
     observed_opponent_profile: str = "balanced",
     observed_avg_cost: float | None = None,
     observed_turns: int = 1,
+    known_opponent_hand_size: int | None = None,
+    min_opponent_hand_size: int | None = None,
+    max_opponent_hand_size: int | None = None,
+    known_opponent_combo_potential: float | None = None,
+    min_opponent_combo_potential: float | None = None,
+    max_opponent_combo_potential: float | None = None,
 ) -> MatchResult:
     engine = GameEngineFSM(target_lore=target_lore)
     bot_1 = _build_bot(strategy=strategy, ismcts_iterations=ismcts_iterations)
@@ -56,6 +85,12 @@ def simulate_simple_match(
                 observed_opponent_profile=observed_opponent_profile,
                 observed_avg_cost=observed_avg_cost,
                 observed_turns=max(1, observed_turns),
+                known_opponent_hand_size=known_opponent_hand_size,
+                min_opponent_hand_size=min_opponent_hand_size,
+                max_opponent_hand_size=max_opponent_hand_size,
+                known_opponent_combo_potential=known_opponent_combo_potential,
+                min_opponent_combo_potential=min_opponent_combo_potential,
+                max_opponent_combo_potential=max_opponent_combo_potential,
             )
             action = bot.choose_action(
                 engine=engine,
@@ -65,9 +100,6 @@ def simulate_simple_match(
         else:
             action = bot.choose_action(legal_actions)
         engine.apply_action(action)
-
-        if not isinstance(action, EndTurnAction):
-            engine.apply_action(EndTurnAction(player_id=active))
 
     return MatchResult(
         winner_player_id=engine.state.winner_player_id,

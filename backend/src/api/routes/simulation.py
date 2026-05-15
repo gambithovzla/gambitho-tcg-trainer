@@ -17,6 +17,12 @@ class MatchRequest(BaseModel):
     observed_opponent_profile: str = Field(default="balanced")
     observed_avg_cost: float | None = Field(default=None, ge=0.0, le=20.0)
     observed_turns: int = Field(default=1, ge=1, le=40)
+    known_opponent_hand_size: int | None = Field(default=None, ge=0, le=40)
+    min_opponent_hand_size: int | None = Field(default=None, ge=0, le=40)
+    max_opponent_hand_size: int | None = Field(default=None, ge=0, le=40)
+    known_opponent_combo_potential: float | None = Field(default=None, ge=0.0, le=1.0)
+    min_opponent_combo_potential: float | None = Field(default=None, ge=0.0, le=1.0)
+    max_opponent_combo_potential: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class MatchResponse(BaseModel):
@@ -34,12 +40,20 @@ class DecisionRequest(BaseModel):
     observed_opponent_profile: str = Field(default="balanced")
     observed_avg_cost: float | None = Field(default=None, ge=0.0, le=20.0)
     observed_turns: int = Field(default=1, ge=1, le=40)
+    known_opponent_hand_size: int | None = Field(default=None, ge=0, le=40)
+    min_opponent_hand_size: int | None = Field(default=None, ge=0, le=40)
+    max_opponent_hand_size: int | None = Field(default=None, ge=0, le=40)
+    known_opponent_combo_potential: float | None = Field(default=None, ge=0.0, le=1.0)
+    min_opponent_combo_potential: float | None = Field(default=None, ge=0.0, le=1.0)
+    max_opponent_combo_potential: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class DecisionOptionResponse(BaseModel):
     action_type: str
     player_id: int
     amount: int | None
+    cost: int | None
+    archetype: str | None
     visits: int
     reward_sum: float
     mean_value: float
@@ -49,6 +63,8 @@ class DecisionResponse(BaseModel):
     chosen_action_type: str
     chosen_player_id: int
     chosen_amount: int | None
+    chosen_cost: int | None
+    chosen_archetype: str | None
     total_iterations: int
     options: list[DecisionOptionResponse]
 
@@ -66,6 +82,12 @@ def run_match(payload: MatchRequest) -> MatchResponse:
         observed_opponent_profile=payload.observed_opponent_profile,
         observed_avg_cost=payload.observed_avg_cost,
         observed_turns=payload.observed_turns,
+        known_opponent_hand_size=payload.known_opponent_hand_size,
+        min_opponent_hand_size=payload.min_opponent_hand_size,
+        max_opponent_hand_size=payload.max_opponent_hand_size,
+        known_opponent_combo_potential=payload.known_opponent_combo_potential,
+        min_opponent_combo_potential=payload.min_opponent_combo_potential,
+        max_opponent_combo_potential=payload.max_opponent_combo_potential,
     )
     return MatchResponse(
         winner_player_id=result.winner_player_id,
@@ -88,6 +110,12 @@ def explain_decision(payload: DecisionRequest) -> DecisionResponse:
         observed_opponent_profile=payload.observed_opponent_profile,
         observed_avg_cost=payload.observed_avg_cost,
         observed_turns=payload.observed_turns,
+        known_opponent_hand_size=payload.known_opponent_hand_size,
+        min_opponent_hand_size=payload.min_opponent_hand_size,
+        max_opponent_hand_size=payload.max_opponent_hand_size,
+        known_opponent_combo_potential=payload.known_opponent_combo_potential,
+        min_opponent_combo_potential=payload.min_opponent_combo_potential,
+        max_opponent_combo_potential=payload.max_opponent_combo_potential,
     )
     report = bot.evaluate_root(
         engine=engine,
@@ -100,12 +128,16 @@ def explain_decision(payload: DecisionRequest) -> DecisionResponse:
         chosen_action_type=chosen.action_type,
         chosen_player_id=chosen.player_id,
         chosen_amount=getattr(chosen, "amount", None),
+        chosen_cost=getattr(chosen, "cost", None),
+        chosen_archetype=getattr(chosen, "archetype", None),
         total_iterations=report.total_iterations,
         options=[
             DecisionOptionResponse(
                 action_type=option.action_type,
                 player_id=option.player_id,
                 amount=option.amount,
+                cost=option.cost,
+                archetype=option.archetype,
                 visits=option.visits,
                 reward_sum=option.reward_sum,
                 mean_value=option.mean_value,

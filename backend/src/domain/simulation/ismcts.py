@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import math
 import random
 
-from src.domain.engine.actions import EndTurnAction, GameAction
+from src.domain.engine.actions import GameAction
 from src.domain.engine.fsm import GameEngineFSM
 from src.domain.simulation.determinization import (
     BeliefDeterminizationSampler,
@@ -12,11 +12,8 @@ from src.domain.simulation.determinization import (
 
 
 def _action_key(action: GameAction) -> tuple:
-    return (
-        action.action_type,
-        action.player_id,
-        getattr(action, "amount", None),
-    )
+    attributes = tuple(sorted(vars(action).items()))
+    return (action.action_type, action.player_id, attributes)
 
 
 @dataclass
@@ -37,6 +34,8 @@ class RootActionEvaluation:
     action_type: str
     player_id: int
     amount: int | None
+    cost: int | None
+    archetype: str | None
     visits: int
     reward_sum: float
     mean_value: float
@@ -100,6 +99,8 @@ class ISMCTSBot:
                         action_type=only.action_type,
                         player_id=only.player_id,
                         amount=getattr(only, "amount", None),
+                        cost=getattr(only, "cost", None),
+                        archetype=getattr(only, "archetype", None),
                         visits=0,
                         reward_sum=0.0,
                         mean_value=0.0,
@@ -121,7 +122,7 @@ class ISMCTSBot:
                 context=context,
                 rng=self._rng,
             )
-            self._apply_action_and_auto_end_turn(rollout_engine, selected_stats.action)
+            self._apply_action(rollout_engine, selected_stats.action)
             reward = self._rollout(rollout_engine, root_player)
             selected_stats.visits += 1
             selected_stats.reward_sum += reward
@@ -132,6 +133,8 @@ class ISMCTSBot:
                 action_type=s.action.action_type,
                 player_id=s.action.player_id,
                 amount=getattr(s.action, "amount", None),
+                cost=getattr(s.action, "cost", None),
+                archetype=getattr(s.action, "archetype", None),
                 visits=s.visits,
                 reward_sum=s.reward_sum,
                 mean_value=s.mean_value,
@@ -162,7 +165,7 @@ class ISMCTSBot:
         while engine.state.winner_player_id is None and depth < self.rollout_depth:
             legal = engine.get_legal_actions()
             action = self._rng.choice(legal)
-            self._apply_action_and_auto_end_turn(engine, action)
+            self._apply_action(engine, action)
             depth += 1
 
         winner = engine.state.winner_player_id
@@ -171,10 +174,8 @@ class ISMCTSBot:
         return 1.0 if winner == root_player else 0.0
 
     @staticmethod
-    def _apply_action_and_auto_end_turn(engine: GameEngineFSM, action: GameAction) -> None:
+    def _apply_action(engine: GameEngineFSM, action: GameAction) -> None:
         engine.apply_action(action)
-        if not isinstance(action, EndTurnAction):
-            engine.apply_action(EndTurnAction(player_id=action.player_id))
 
     @staticmethod
     def _heuristic_terminal_value(engine: GameEngineFSM, root_player: int) -> float:
