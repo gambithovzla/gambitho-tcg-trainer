@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
+import { CardCatalog } from "@/components/card-catalog";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
 
 type Status = "idle" | "loading" | "ok" | "error";
@@ -337,6 +339,16 @@ export default function Home() {
             </div>
           </div>
         </header>
+
+        <section className="surface mb-6 p-5">
+          <div className="mb-4">
+            <h2 className="panel-title text-xl">Catálogo de cartas</h2>
+            <p className="subtle mt-1 text-sm">
+              Arte oficial de Ravensburger — misma apariencia que las cartas físicas de Lorcana.
+            </p>
+          </div>
+          <CardCatalog />
+        </section>
 
         <main className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           <Panel title="Simulación de Match" subtitle="Corre una partida completa bot vs bot con estrategia configurable.">

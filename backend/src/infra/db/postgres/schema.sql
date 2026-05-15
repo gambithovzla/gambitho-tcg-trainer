@@ -4,8 +4,13 @@ CREATE TABLE IF NOT EXISTS dim_card_core (
   subtitle TEXT,
   set_id TEXT,
   collector_number TEXT,
-  rarity TEXT
+  rarity TEXT,
+  image_url TEXT,
+  image_thumbnail_url TEXT
 );
+
+ALTER TABLE dim_card_core ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE dim_card_core ADD COLUMN IF NOT EXISTS image_thumbnail_url TEXT;
 
 CREATE TABLE IF NOT EXISTS fact_card_stats (
   card_uuid TEXT PRIMARY KEY REFERENCES dim_card_core (uuid),

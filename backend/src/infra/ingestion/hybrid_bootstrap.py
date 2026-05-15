@@ -2,9 +2,30 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+from pathlib import Path
 
 from src.api.routes.ingestion import _build_ingestor
 from src.infra.ingestion.hybrid_source import fetch_hybrid_raw_cards, merge_hybrid_cards
+
+
+def _load_env_file() -> None:
+    env_path = Path.cwd() / ".env"
+    if not env_path.is_file():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, value = stripped.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+def _log(message: str) -> None:
+    print(message, flush=True)
 
 
 def _parse_csv(value: str) -> list[str]:
@@ -12,6 +33,7 @@ def _parse_csv(value: str) -> list[str]:
 
 
 def main() -> None:
+    _load_env_file()
     parser = argparse.ArgumentParser(
         description="Bootstrap/re-sync catalog from LorcanaJSON + Lorcast."
     )
@@ -26,6 +48,7 @@ def main() -> None:
     include_lorcanajson = args.include_lorcanajson or (not args.include_lorcast)
     include_lorcast = args.include_lorcast or (not args.include_lorcanajson)
 
+    _log("Descargando fuentes (LorcanaJSON puede tardar varios minutos)...")
     fetched = fetch_hybrid_raw_cards(
         language=args.language,
         lorcanajson_set_codes=_parse_csv(args.lorcanajson_set_codes),
@@ -33,12 +56,16 @@ def main() -> None:
         include_lorcanajson=include_lorcanajson,
         include_lorcast=include_lorcast,
     )
+    _log(f"Descargado: {fetched.cards_seen_by_source}")
     ingestor = _build_ingestor()
+    _log("Normalizando y fusionando cartas...")
     merged, rejected = merge_hybrid_cards(
         ingestor=ingestor,
         raw_cards_by_source=fetched.raw_cards_by_source,
         source_precedence=tuple(_parse_csv(args.source_precedence)),
     )
+    _log(f"Fusionadas: {len(merged)} (rechazadas en merge: {rejected})")
+    _log("Guardando en Postgres (puede tardar 10-20 min por Railway)...")
     summary = ingestor.ingest_from_normalized_cards(
         merged,
         cards_seen=sum(fetched.cards_seen_by_source.values()),

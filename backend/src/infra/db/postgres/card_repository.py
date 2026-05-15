@@ -1,8 +1,31 @@
 from dataclasses import dataclass
 from pathlib import Path
 import os
+from typing import Any
 
 import psycopg
+
+
+@dataclass(frozen=True)
+class CatalogCard:
+    id: str
+    name: str
+    subtitle: str | None
+    set_id: str | None
+    collector_number: str | None
+    rarity: str | None
+    card_type: str | None
+    cost: int | None
+    strength: int | None
+    willpower: int | None
+    lore: int | None
+    move_cost: int | None
+    inkwell_inkable: bool | None
+    color_aspect: list[str]
+    subtypes: list[str]
+    rules_text: str
+    image_url: str | None
+    image_thumbnail_url: str | None
 
 
 @dataclass(frozen=True)
@@ -24,6 +47,8 @@ class CardRecord:
     subtypes: list[str]
     rules_text: str
     source_provider: str
+    image_url: str | None = None
+    image_thumbnail_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -64,14 +89,21 @@ class PostgresCardRepository:
                 for card in cards:
                     cur.execute(
                         """
-                        INSERT INTO dim_card_core (uuid, name, subtitle, set_id, collector_number, rarity)
-                        VALUES (%s, %s, %s, %s, %s, %s)
+                        INSERT INTO dim_card_core (
+                          uuid, name, subtitle, set_id, collector_number, rarity,
+                          image_url, image_thumbnail_url
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (uuid) DO UPDATE SET
                           name = EXCLUDED.name,
                           subtitle = EXCLUDED.subtitle,
                           set_id = EXCLUDED.set_id,
                           collector_number = EXCLUDED.collector_number,
-                          rarity = EXCLUDED.rarity
+                          rarity = EXCLUDED.rarity,
+                          image_url = COALESCE(EXCLUDED.image_url, dim_card_core.image_url),
+                          image_thumbnail_url = COALESCE(
+                            EXCLUDED.image_thumbnail_url, dim_card_core.image_thumbnail_url
+                          )
                         """,
                         (
                             card.uuid,
@@ -80,6 +112,8 @@ class PostgresCardRepository:
                             card.set_id,
                             card.collector_number,
                             card.rarity,
+                            card.image_url,
+                            card.image_thumbnail_url,
                         ),
                     )
 
@@ -143,6 +177,130 @@ class PostgresCardRepository:
             conn.commit()
 
         return len(cards)
+
+    def update_card_images(self, updates: list[tuple[str, str | None, str | None]]) -> int:
+        if not updates:
+            return 0
+
+        with psycopg.connect(self._dsn, connect_timeout=self._connect_timeout) as conn:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """
+                    UPDATE dim_card_core
+                    SET image_url = %s, image_thumbnail_url = %s
+                    WHERE uuid = %s
+                    """,
+                    [(url, thumb, card_id) for card_id, url, thumb in updates],
+                )
+            conn.commit()
+        return len(updates)
+
+    def _catalog_select_sql(self) -> str:
+        return """
+            SELECT
+              core.uuid,
+              core.name,
+              core.subtitle,
+              core.set_id,
+              core.collector_number,
+              core.rarity,
+              core.image_url,
+              core.image_thumbnail_url,
+              stats.cost,
+              stats.strength,
+              stats.willpower,
+              stats.lore,
+              tags.color_aspect,
+              tags.subtypes,
+              rules.rules_text,
+              stats.move_cost,
+              stats.inkwell_inkable,
+              tags.card_type
+            FROM dim_card_core AS core
+            LEFT JOIN fact_card_stats AS stats ON stats.card_uuid = core.uuid
+            LEFT JOIN dim_card_tags AS tags ON tags.card_uuid = core.uuid
+            LEFT JOIN fact_card_rules AS rules ON rules.card_uuid = core.uuid
+        """
+
+    @staticmethod
+    def _catalog_row_to_card(row: tuple[Any, ...]) -> CatalogCard:
+        subtypes = list(row[13]) if row[13] else []
+        colors = list(row[12]) if row[12] else []
+        return CatalogCard(
+            id=row[0],
+            name=row[1],
+            subtitle=row[2],
+            set_id=row[3],
+            collector_number=str(row[4]) if row[4] is not None else None,
+            rarity=row[5],
+            image_url=row[6],
+            image_thumbnail_url=row[7],
+            cost=row[8],
+            strength=row[9],
+            willpower=row[10],
+            lore=row[11],
+            move_cost=row[15],
+            inkwell_inkable=row[16],
+            color_aspect=colors,
+            subtypes=subtypes,
+            rules_text=row[14] or "",
+            card_type=row[17],
+        )
+
+    def list_catalog_cards(
+        self,
+        *,
+        search: str | None = None,
+        limit: int = 48,
+        offset: int = 0,
+    ) -> tuple[list[CatalogCard], int]:
+        safe_limit = max(1, min(limit, 200))
+        safe_offset = max(0, offset)
+        term = (search or "").strip()
+
+        where_clause = ""
+        params: list[Any] = []
+        if term:
+            where_clause = """
+                WHERE core.name ILIKE %s
+                   OR core.uuid = %s
+                   OR core.subtitle ILIKE %s
+            """
+            like = f"%{term}%"
+            params.extend([like, term, like])
+
+        with psycopg.connect(self._dsn, connect_timeout=self._connect_timeout) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"SELECT COUNT(*) FROM dim_card_core AS core {where_clause}",
+                    params,
+                )
+                total = int(cur.fetchone()[0])
+
+                cur.execute(
+                    f"""
+                    {self._catalog_select_sql()}
+                    {where_clause}
+                    ORDER BY core.name ASC
+                    LIMIT %s OFFSET %s
+                    """,
+                    [*params, safe_limit, safe_offset],
+                )
+                rows = cur.fetchall()
+
+        return [self._catalog_row_to_card(row) for row in rows], total
+
+    def get_catalog_card(self, card_id: str) -> CatalogCard | None:
+        with psycopg.connect(self._dsn, connect_timeout=self._connect_timeout) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"{self._catalog_select_sql()} WHERE core.uuid = %s",
+                    (card_id,),
+                )
+                row = cur.fetchone()
+        if not row:
+            return None
+        return self._catalog_row_to_card(row)
 
     def get_existing_card_ids(self, card_ids: list[str]) -> set[str]:
         if not card_ids:

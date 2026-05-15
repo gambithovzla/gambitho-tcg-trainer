@@ -42,6 +42,32 @@ class LorcanaIngestor:
         return None
 
     @staticmethod
+    def _lorcanajson_image_urls(raw: dict) -> tuple[str | None, str | None]:
+        images = raw.get("images")
+        if not isinstance(images, dict):
+            return None, None
+        full = images.get("full")
+        thumb = images.get("thumbnail")
+        image_url = str(full).strip() if full else None
+        thumbnail_url = str(thumb).strip() if thumb else None
+        return image_url or None, thumbnail_url or None
+
+    @staticmethod
+    def _lorcast_image_urls(raw: dict) -> tuple[str | None, str | None]:
+        for key in ("image", "image_url", "imageUrl"):
+            value = raw.get(key)
+            if value:
+                return str(value).strip(), None
+        images = raw.get("images")
+        if isinstance(images, dict):
+            full = images.get("large") or images.get("full") or images.get("normal")
+            thumb = images.get("small") or images.get("thumbnail")
+            image_url = str(full).strip() if full else None
+            thumbnail_url = str(thumb).strip() if thumb else None
+            return image_url or None, thumbnail_url or None
+        return None, None
+
+    @staticmethod
     def _to_list(value) -> list[str]:
         if value is None:
             return []
@@ -102,6 +128,7 @@ class LorcanaIngestor:
         set_id = set_obj.get("code") or set_obj.get("id")
 
         subtypes = self._to_list(raw.get("classifications"))
+        image_url, image_thumbnail_url = self._lorcast_image_urls(raw)
 
         return {
             "id": card_uuid,
@@ -121,6 +148,8 @@ class LorcanaIngestor:
             "subtypes": subtypes,
             "text": raw.get("text") or raw.get("abilities") or "",
             "source_provider": "lorcast",
+            "image_url": image_url,
+            "image_thumbnail_url": image_thumbnail_url,
         }
 
     def _normalize_lorcanajson_card(self, raw: dict) -> dict | None:
@@ -163,6 +192,8 @@ class LorcanaIngestor:
                         parts.append(str(fragment))
             text = "\n".join(parts)
 
+        image_url, image_thumbnail_url = self._lorcanajson_image_urls(raw)
+
         return {
             "id": card_uuid,
             "name": display_name,
@@ -181,6 +212,8 @@ class LorcanaIngestor:
             "subtypes": subtypes,
             "text": text if isinstance(text, str) else str(text or ""),
             "source_provider": "lorcanajson",
+            "image_url": image_url,
+            "image_thumbnail_url": image_thumbnail_url,
         }
 
     def _normalize_generic_card(self, raw: dict) -> dict | None:
@@ -197,6 +230,15 @@ class LorcanaIngestor:
             card_type = str(card_type[0])
         elif card_type is not None:
             card_type = str(card_type)
+
+        image_url = raw.get("image_url") or raw.get("imageUrl")
+        if image_url is not None:
+            image_url = str(image_url).strip() or None
+        image_thumbnail_url = raw.get("image_thumbnail_url") or raw.get("thumbnail")
+        if image_thumbnail_url is not None:
+            image_thumbnail_url = str(image_thumbnail_url).strip() or None
+        if not image_url:
+            image_url, image_thumbnail_url = self._lorcanajson_image_urls(raw)
 
         return {
             "id": card_uuid,
@@ -216,6 +258,8 @@ class LorcanaIngestor:
             "subtypes": subtypes,
             "text": raw.get("text") or raw.get("abilities") or "",
             "source_provider": "generic",
+            "image_url": image_url,
+            "image_thumbnail_url": image_thumbnail_url,
         }
 
     @staticmethod
@@ -287,6 +331,8 @@ class LorcanaIngestor:
                     subtypes=normalized["subtypes"],
                     rules_text=normalized.get("text") or "",
                     source_provider=normalized.get("source_provider") or "generic",
+                    image_url=normalized.get("image_url"),
+                    image_thumbnail_url=normalized.get("image_thumbnail_url"),
                 )
             )
 

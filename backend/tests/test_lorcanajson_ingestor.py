@@ -63,6 +63,25 @@ def test_normalize_lorcanajson_character() -> None:
     assert out["card_type"] == "Character"
 
 
+def test_normalize_lorcanajson_extracts_official_images() -> None:
+    ingestor = LorcanaIngestor(None, None, None)
+    raw = {
+        "id": 1,
+        "fullName": "Ariel - On Human Legs",
+        "type": "Character",
+        "setCode": "1",
+        "number": 1,
+        "images": {
+            "full": "https://api.lorcana.ravensburger.com/images/en/set1/1_full.jpg",
+            "thumbnail": "https://api.lorcana.ravensburger.com/images/en/set1/1_thumb.jpg",
+        },
+    }
+    out = ingestor.normalize_raw_card(raw)
+    assert out is not None
+    assert out["image_url"] == "https://api.lorcana.ravensburger.com/images/en/set1/1_full.jpg"
+    assert out["image_thumbnail_url"] == "https://api.lorcana.ravensburger.com/images/en/set1/1_thumb.jpg"
+
+
 def test_normalize_lorcanajson_location_move_cost() -> None:
     ingestor = LorcanaIngestor(None, None, None)
     raw = {
