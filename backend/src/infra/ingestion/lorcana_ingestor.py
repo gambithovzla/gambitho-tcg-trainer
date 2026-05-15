@@ -56,10 +56,34 @@ class LorcanaIngestor:
             return True
         return "ink" in raw and isinstance(raw.get("type"), list)
 
+    @staticmethod
+    def _is_lorcanajson_shape(raw: dict) -> bool:
+        """LorcanaJSON v2 cards (https://lorcanajson.org) — not Lorcast."""
+        if not isinstance(raw.get("id"), int):
+            return False
+        if raw.get("fullName") and raw.get("type") in {
+            "Character",
+            "Location",
+            "Item",
+            "Action",
+            "Song",
+        }:
+            return True
+        if raw.get("fullIdentifier"):
+            return True
+        fts = raw.get("fullTextSections")
+        if isinstance(fts, list):
+            return True
+        if raw.get("simpleName"):
+            return True
+        return False
+
     def normalize_raw_card(self, raw: dict) -> dict | None:
         """Maps provider-specific JSON to the internal normalized card dict."""
         if self._is_lorcast_shape(raw):
             return self._normalize_lorcast_card(raw)
+        if self._is_lorcanajson_shape(raw):
+            return self._normalize_lorcanajson_card(raw)
         return self._normalize_generic_card(raw)
 
     def _normalize_lorcast_card(self, raw: dict) -> dict | None:
@@ -96,6 +120,65 @@ class LorcanaIngestor:
             "card_type": card_type,
             "subtypes": subtypes,
             "text": raw.get("text") or raw.get("abilities") or "",
+        }
+
+    def _normalize_lorcanajson_card(self, raw: dict) -> dict | None:
+        """https://lorcanajson.org — v2 card objects (int ids, fullName, camelCase moveCost, etc.)."""
+        cid = raw.get("id")
+        if cid is None:
+            return None
+        card_uuid = str(cid).strip()
+        if not card_uuid:
+            return None
+
+        full_name = str(raw.get("fullName") or "").strip()
+        short_name = str(raw.get("name") or "").strip()
+        display_name = full_name or short_name
+        if not display_name:
+            return None
+
+        subtitle = raw.get("version")
+        if subtitle is not None:
+            subtitle = str(subtitle).strip() or None
+
+        color_val = raw.get("magic_ink_color") or raw.get("color")
+        colors = self._to_list(color_val) if color_val is not None else []
+
+        card_type = raw.get("type")
+        if card_type is not None:
+            card_type = str(card_type)
+
+        subtypes = self._to_list(raw.get("subtypes"))
+
+        text = raw.get("fullText") or raw.get("text") or ""
+        if not text and isinstance(raw.get("effects"), list):
+            parts: list[str] = []
+            for entry in raw["effects"]:
+                if isinstance(entry, str):
+                    parts.append(entry)
+                elif isinstance(entry, dict):
+                    fragment = entry.get("fullText") or entry.get("effect") or entry.get("name")
+                    if fragment:
+                        parts.append(str(fragment))
+            text = "\n".join(parts)
+
+        return {
+            "id": card_uuid,
+            "name": display_name,
+            "subtitle": subtitle,
+            "set_id": raw.get("setCode") or raw.get("set_id"),
+            "collector_number": raw.get("number"),
+            "rarity": raw.get("rarity"),
+            "cost": self._to_int(raw.get("cost")),
+            "inkwell_inkable": self._to_bool(raw.get("inkwell")),
+            "strength": self._to_int(raw.get("strength")),
+            "willpower": self._to_int(raw.get("willpower")),
+            "lore": self._to_int(raw.get("lore")),
+            "move_cost": self._to_int(raw.get("move_cost") or raw.get("moveCost")),
+            "color_aspect": colors,
+            "card_type": card_type,
+            "subtypes": subtypes,
+            "text": text if isinstance(text, str) else str(text or ""),
         }
 
     def _normalize_generic_card(self, raw: dict) -> dict | None:
@@ -141,6 +224,8 @@ class LorcanaIngestor:
         - {"cards": list[dict]}
         - {"data": list[dict]}
         - {"results": list[dict]}  (Lorcast search)
+        - LorcanaJSON setdata.*.json: top-level `code` (set id) is copied onto each card as `setCode`
+          when missing (per-file cards omit `setCode`; allCards.json includes it).
         - single card dict (id + name)
         """
         if isinstance(payload, list):
@@ -151,7 +236,22 @@ class LorcanaIngestor:
             for key in ("cards", "data"):
                 value = payload.get(key)
                 if isinstance(value, list):
-                    return [item for item in value if isinstance(item, dict)]
+                    parent_set_code: str | None = None
+                    if (
+                        key == "cards"
+                        and payload.get("hasAllCards") is not None
+                        and payload.get("sets") is None
+                        and payload.get("code") is not None
+                    ):
+                        parent_set_code = str(payload["code"])
+                    out: list[dict] = []
+                    for item in value:
+                        if not isinstance(item, dict):
+                            continue
+                        if parent_set_code is not None and item.get("setCode") is None:
+                            item = {**item, "setCode": parent_set_code}
+                        out.append(item)
+                    return out
             if payload.get("id") and payload.get("name"):
                 return [payload]
         return []

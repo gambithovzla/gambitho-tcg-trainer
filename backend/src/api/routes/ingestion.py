@@ -1,7 +1,6 @@
 from typing import Any, Literal
-import json
-from urllib.request import Request, urlopen
 
+import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -12,6 +11,16 @@ from src.infra.ingestion.lorcana_ingestor import IngestionSummary, LorcanaIngest
 from src.infra.ingestion.lorcast_client import fetch_card_search
 
 router = APIRouter()
+
+LORCANAJSON_FILES_BASE = "https://lorcanajson.org/files/current"
+
+
+def _lorcanajson_all_cards_url(language: str) -> str:
+    return f"{LORCANAJSON_FILES_BASE}/{language}/allCards.json"
+
+
+def _lorcanajson_setdata_url(language: str, set_code: str) -> str:
+    return f"{LORCANAJSON_FILES_BASE}/{language}/sets/setdata.{set_code}.json"
 
 
 class LorcanaIngestRequest(BaseModel):
@@ -35,6 +44,17 @@ class LorcastIngestRequest(BaseModel):
 
     q: str = Field(default="set:1", min_length=1, max_length=512)
     unique: Literal["cards", "prints"] = "prints"
+
+
+class LorcanaJsonIngestRequest(BaseModel):
+    """Fetch official LorcanaJSON dumps from https://lorcanajson.org/files/current/..."""
+
+    language: Literal["en", "fr", "de", "it"] = "en"
+    resource: Literal["all_cards", "set"] = "all_cards"
+    set_code: str | None = Field(
+        default=None,
+        description='Set id for resource "set", e.g. "1" for The First Chapter (setdata.1.json).',
+    )
 
 
 def _build_ingestor() -> LorcanaIngestor:
@@ -64,16 +84,53 @@ def ingest_lorcana(payload: LorcanaIngestRequest) -> LorcanaIngestResponse:
 
 @router.post("/lorcana/source", response_model=LorcanaIngestResponse)
 def ingest_lorcana_from_source(payload: LorcanaIngestFromSourceRequest) -> LorcanaIngestResponse:
-    req = Request(
-        payload.url,
-        headers={"User-Agent": "gambitho-tcg-trainer/0.1"},
-    )
+    headers = {"User-Agent": "gambitho-tcg-trainer/0.1"}
+    timeout = httpx.Timeout(120.0, connect=30.0)
     try:
-        with urlopen(req, timeout=20) as response:
-            raw = response.read().decode("utf-8")
-            source_payload = json.loads(raw)
+        with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+            response = client.get(payload.url, headers=headers)
+            response.raise_for_status()
+            source_payload = response.json()
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Source fetch failed: {exc}") from exc
+
+    cards = LorcanaIngestor.extract_cards(source_payload)
+    ingestor = _build_ingestor()
+    try:
+        result = ingestor.ingest_from_payload(cards)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Ingestion failed: {exc}") from exc
+
+    return LorcanaIngestResponse(
+        cards_seen=result.cards_seen,
+        cards_loaded_sql=result.cards_loaded_sql,
+        cards_loaded_graph=result.cards_loaded_graph,
+        cards_loaded_vector=result.cards_loaded_vector,
+        cards_rejected=result.cards_rejected,
+    )
+
+
+@router.post("/lorcana/lorcanajson", response_model=LorcanaIngestResponse)
+def ingest_lorcana_from_lorcanajson(payload: LorcanaJsonIngestRequest) -> LorcanaIngestResponse:
+    if payload.resource == "set":
+        if not (payload.set_code and payload.set_code.strip()):
+            raise HTTPException(
+                status_code=422,
+                detail='resource "set" requires non-empty set_code (e.g. "1").',
+            )
+        url = _lorcanajson_setdata_url(payload.language, payload.set_code.strip())
+    else:
+        url = _lorcanajson_all_cards_url(payload.language)
+
+    headers = {"User-Agent": "gambitho-tcg-trainer/0.1"}
+    timeout = httpx.Timeout(300.0, connect=30.0)
+    try:
+        with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+            response = client.get(url, headers=headers)
+            response.raise_for_status()
+            source_payload = response.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"LorcanaJSON fetch failed: {exc}") from exc
 
     cards = LorcanaIngestor.extract_cards(source_payload)
     ingestor = _build_ingestor()
