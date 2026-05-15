@@ -22,6 +22,7 @@ Este repo ya incluye:
   - interfaz de determinizacion con sampler de creencias guiado por señales observadas,
   - reporte estructurado de decision ISMCTS (`POST /simulate/decision`),
   - ingesta Lorcana (`POST /ingest/lorcana`) con escritura SQL y grafo/vectorial (Neo4j y Qdrant activos si hay variables de entorno),
+  - ingesta desde Lorcast (`POST /ingest/lorcana/lorcast`, usa https://api.lorcast.com/v0/cards/search),
   - ingesta desde URL (`POST /ingest/lorcana/source`).
 
 ## Comandos rapidos
