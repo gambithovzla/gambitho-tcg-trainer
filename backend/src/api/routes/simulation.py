@@ -1,6 +1,6 @@
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from src.domain.engine.fsm import GameEngineFSM
@@ -12,6 +12,7 @@ from src.infra.db.postgres.card_repository import CardIntentProfile, PostgresCar
 from src.infra.simulation.intent_preset_store import IntentPresetStore
 
 router = APIRouter()
+STRICT_INTENT_CONTRACT_VERSION = "1"
 
 
 class IntentDeckCardInput(BaseModel):
@@ -26,7 +27,16 @@ class IntentDeckCardInput(BaseModel):
 
 
 class MatchRequest(BaseModel):
-    max_turns: int = Field(default=20, ge=1, le=200)
+    max_turns: int = Field(
+        default=20,
+        ge=1,
+        le=200,
+        description=(
+            "Upper bound on the engine turn counter while the match loop runs (no winner). "
+            "The loop continues while turn_number <= max_turns. If the lore target is not reached, "
+            "the reported turns_played equals max_turns + 1 after the last allowed end_turn advance."
+        ),
+    )
     target_lore: int = Field(default=20, ge=1, le=40)
     strategy: str = Field(default="heuristic")
     ismcts_iterations: int = Field(default=128, ge=1, le=2000)
@@ -45,21 +55,31 @@ class MatchRequest(BaseModel):
     player_one_intent_preset: str | None = None
     player_two_intent_preset: str | None = None
     opponent_intent_preset: str | None = None
+    strict_intent_resolution: bool = False
     player_one_deck: list[IntentDeckCardInput] | None = None
     player_two_deck: list[IntentDeckCardInput] | None = None
 
 
 class MatchResponse(BaseModel):
     winner_player_id: int | None
-    turns_played: int
+    turns_played: int = Field(
+        description=(
+            "Engine turn counter after the match stops: starts at 1, increments by 1 on each "
+            "completed end_turn. If the match ends by lore, this reflects the turn counter at that "
+            "moment. If it ends because max_turns was exhausted with no winner, this equals "
+            "max_turns + 1."
+        ),
+    )
     history: list[str]
     resolved_player_one_intent_weights: dict[str, float]
     resolved_player_two_intent_weights: dict[str, float]
     resolved_weights_source: str
+    strict_validation: list["StrictIntentValidationEntry"] = Field(default_factory=list)
 
 
 class IntentProfileRequest(BaseModel):
     deck: list[IntentDeckCardInput] = Field(default_factory=list)
+    strict: bool = False
 
 
 class IntentProfileResponse(BaseModel):
@@ -67,6 +87,7 @@ class IntentProfileResponse(BaseModel):
     cards_seen: int
     cards_matched_catalog: int
     source: str
+    strict_validation: list["StrictIntentValidationEntry"] = Field(default_factory=list)
 
 
 class IntentPresetUpsertRequest(BaseModel):
@@ -135,6 +156,7 @@ class DecisionRequest(BaseModel):
     opponent_intent_weights: dict[str, float] | None = None
     active_player_intent_preset: str | None = None
     opponent_intent_preset: str | None = None
+    strict_intent_resolution: bool = False
     active_player_deck: list[IntentDeckCardInput] | None = None
     opponent_deck: list[IntentDeckCardInput] | None = None
 
@@ -161,6 +183,15 @@ class DecisionResponse(BaseModel):
     resolved_active_player_intent_weights: dict[str, float]
     resolved_opponent_intent_weights: dict[str, float]
     resolved_weights_source: str
+    strict_validation: list["StrictIntentValidationEntry"] = Field(default_factory=list)
+
+
+class StrictIntentValidationEntry(BaseModel):
+    actor: str
+    hinted_cards: int
+    matched_catalog_cards: int
+    total_cards: int
+    source: str
 
 
 def _infer_weights_from_deck_with_metadata(
@@ -202,6 +233,104 @@ def _infer_weights_from_deck(deck: list[IntentDeckCardInput] | None) -> dict[str
     return weights
 
 
+def _count_cards_with_structural_hints(deck: list[IntentDeckCardInput]) -> int:
+    count = 0
+    for card in deck:
+        has_numeric_hint = any(
+            value is not None
+            for value in (card.cost, card.strength, card.willpower, card.lore)
+        )
+        has_type_hint = bool((card.card_type or "").strip()) or bool(card.subtypes)
+        if has_numeric_hint or has_type_hint:
+            count += 1
+    return count
+
+
+def _strict_intent_error_detail(
+    error_code: str,
+    message: str,
+    *,
+    context: dict[str, object] | None = None,
+) -> dict[str, object]:
+    return {
+        "contract_version": STRICT_INTENT_CONTRACT_VERSION,
+        "error_code": error_code,
+        "message": message,
+        "context": context or {},
+    }
+
+
+def _build_strict_validation_entry(
+    actor_label: str,
+    deck: list[IntentDeckCardInput],
+) -> StrictIntentValidationEntry:
+    hinted_cards = _count_cards_with_structural_hints(deck)
+    _, matched_catalog, source = _infer_weights_from_deck_with_metadata(deck)
+    return StrictIntentValidationEntry(
+        actor=actor_label,
+        hinted_cards=hinted_cards,
+        matched_catalog_cards=matched_catalog,
+        total_cards=len(deck),
+        source=source,
+    )
+
+
+def _enforce_strict_deck_inference(
+    actor_label: str,
+    deck: list[IntentDeckCardInput] | None,
+    *,
+    matched_catalog: int | None = None,
+    source: str | None = None,
+    hinted_cards: int | None = None,
+) -> None:
+    if not deck:
+        raise HTTPException(
+            status_code=422,
+            detail=_strict_intent_error_detail(
+                "STRICT_INTENT_INPUT_REQUIRED",
+                f"Strict intent resolution requires {actor_label} deck data or explicit weights/preset.",
+                context={"actor": actor_label},
+            ),
+        )
+
+    resolved_matched_catalog = matched_catalog
+    resolved_source = source
+    if resolved_matched_catalog is None or resolved_source is None:
+        _, resolved_matched_catalog, resolved_source = _infer_weights_from_deck_with_metadata(deck)
+
+    if resolved_matched_catalog is None:
+        resolved_matched_catalog = 0
+    if resolved_source is None:
+        resolved_source = "none"
+
+    resolved_hinted_cards = hinted_cards
+    if resolved_hinted_cards is None:
+        resolved_hinted_cards = _count_cards_with_structural_hints(deck)
+
+    if resolved_source == "catalog+input":
+        return
+
+    if resolved_hinted_cards < len(deck):
+        raise HTTPException(
+            status_code=422,
+            detail=_strict_intent_error_detail(
+                "STRICT_INTENT_HINTS_INSUFFICIENT",
+                (
+                    f"Strict intent resolution for {actor_label} failed: "
+                    f"{resolved_hinted_cards}/{len(deck)} deck cards have usable hints and catalog matched "
+                    f"{resolved_matched_catalog}/{len(deck)}. Provide card hints (type/stats) or ingest catalog."
+                ),
+                context={
+                    "actor": actor_label,
+                    "hinted_cards": resolved_hinted_cards,
+                    "matched_catalog_cards": resolved_matched_catalog,
+                    "total_cards": len(deck),
+                    "source": resolved_source,
+                },
+            ),
+        )
+
+
 def _resolve_weights(
     *,
     explicit_weights: dict[str, float] | None,
@@ -209,31 +338,51 @@ def _resolve_weights(
     preset_name: str | None,
     preset_store: IntentPresetStore,
     actor_label: str,
-) -> tuple[dict[str, float], str]:
+) -> tuple[dict[str, float], str, str | None]:
     if explicit_weights is not None:
-        return GameEngineFSM._normalize_intent_weights(explicit_weights), f"{actor_label}:manual"
+        return GameEngineFSM._normalize_intent_weights(explicit_weights), f"{actor_label}:manual", None
 
     deck_weights = _infer_weights_from_deck(deck)
     if deck_weights is not None:
-        return GameEngineFSM._normalize_intent_weights(deck_weights), f"{actor_label}:deck"
+        return GameEngineFSM._normalize_intent_weights(deck_weights), f"{actor_label}:deck", None
 
     if preset_name:
         preset = preset_store.get_preset(preset_name)
         if preset is not None:
-            return GameEngineFSM._normalize_intent_weights(preset.weights), f"{actor_label}:preset:{preset_name}"
-        return GameEngineFSM._normalize_intent_weights({}), f"{actor_label}:preset_missing:{preset_name}"
+            return (
+                GameEngineFSM._normalize_intent_weights(preset.weights),
+                f"{actor_label}:preset:{preset_name}",
+                None,
+            )
+        return (
+            GameEngineFSM._normalize_intent_weights({}),
+            f"{actor_label}:preset_missing:{preset_name}",
+            preset_name,
+        )
 
-    return GameEngineFSM._normalize_intent_weights({}), f"{actor_label}:default"
+    return GameEngineFSM._normalize_intent_weights({}), f"{actor_label}:default", None
 
 
 @router.post("/intent-profile", response_model=IntentProfileResponse)
 def infer_intent_profile(payload: IntentProfileRequest) -> IntentProfileResponse:
     weights, matched_catalog, source = _infer_weights_from_deck_with_metadata(payload.deck)
+    strict_validation: list[StrictIntentValidationEntry] = []
+    if payload.strict:
+        entry = _build_strict_validation_entry("intent_profile", payload.deck)
+        _enforce_strict_deck_inference(
+            "intent_profile",
+            payload.deck,
+            matched_catalog=entry.matched_catalog_cards,
+            source=entry.source,
+            hinted_cards=entry.hinted_cards,
+        )
+        strict_validation.append(entry)
     return IntentProfileResponse(
         weights=weights or {},
         cards_seen=len(payload.deck),
         cards_matched_catalog=matched_catalog,
         source=source,
+        strict_validation=strict_validation,
     )
 
 
@@ -397,30 +546,114 @@ def run_match(payload: MatchRequest) -> MatchResponse:
         payload.strategy = "heuristic"
 
     store = IntentPresetStore()
-    player_one_weights, p1_source = _resolve_weights(
+    player_one_weights, p1_source, p1_missing = _resolve_weights(
         explicit_weights=payload.player_one_intent_weights,
         deck=payload.player_one_deck,
         preset_name=payload.player_one_intent_preset,
         preset_store=store,
         actor_label="p1",
     )
-    player_two_weights, p2_source = _resolve_weights(
+    player_two_weights, p2_source, p2_missing = _resolve_weights(
         explicit_weights=payload.player_two_intent_weights,
         deck=payload.player_two_deck,
         preset_name=payload.player_two_intent_preset,
         preset_store=store,
         actor_label="p2",
     )
-    opponent_weights, opp_source = _resolve_weights(
+    opponent_weights, opp_source, opp_missing = _resolve_weights(
         explicit_weights=payload.opponent_intent_weights,
         deck=payload.player_two_deck,
         preset_name=payload.opponent_intent_preset or payload.player_two_intent_preset,
         preset_store=store,
         actor_label="opp",
     )
-    if payload.opponent_intent_weights is None and payload.opponent_intent_preset is None and payload.player_two_intent_preset is None and payload.player_two_deck is None:
+    if (
+        payload.opponent_intent_weights is None
+        and payload.opponent_intent_preset is None
+        and payload.player_two_intent_preset is None
+        and payload.player_two_deck is None
+    ):
         opponent_weights = player_two_weights
         opp_source = "opp:p2_resolved"
+
+    strict_validation: list[StrictIntentValidationEntry] = []
+    if payload.strict_intent_resolution:
+        missing = [name for name in (p1_missing, p2_missing, opp_missing) if name]
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail=_strict_intent_error_detail(
+                    "STRICT_INTENT_PRESET_MISSING",
+                    f"Missing intent preset(s): {', '.join(sorted(set(missing)))}",
+                    context={"missing_presets": sorted(set(missing))},
+                ),
+            )
+        if p1_source.endswith(":default"):
+            raise HTTPException(
+                status_code=422,
+                detail=_strict_intent_error_detail(
+                    "STRICT_INTENT_INPUT_REQUIRED",
+                    "Strict intent resolution requires explicit intent weights, a preset, or deck data for player one.",
+                    context={"actor": "p1"},
+                ),
+            )
+        if p2_source.endswith(":default"):
+            raise HTTPException(
+                status_code=422,
+                detail=_strict_intent_error_detail(
+                    "STRICT_INTENT_INPUT_REQUIRED",
+                    "Strict intent resolution requires explicit intent weights, a preset, or deck data for player two.",
+                    context={"actor": "p2"},
+                ),
+            )
+        if opp_source.endswith(":default"):
+            raise HTTPException(
+                status_code=422,
+                detail=_strict_intent_error_detail(
+                    "STRICT_INTENT_INPUT_REQUIRED",
+                    "Strict intent resolution requires explicit intent weights, a preset, or deck data for the opponent model.",
+                    context={"actor": "opponent"},
+                ),
+            )
+        if opp_source == "opp:p2_resolved" and p2_source.endswith(":default"):
+            raise HTTPException(
+                status_code=422,
+                detail=_strict_intent_error_detail(
+                    "STRICT_INTENT_INPUT_REQUIRED",
+                    "Strict intent resolution requires explicit intent for player two before the opponent can inherit it.",
+                    context={"actor": "p2"},
+                ),
+            )
+        if p1_source.endswith(":deck"):
+            p1_entry = _build_strict_validation_entry("p1", payload.player_one_deck or [])
+            _enforce_strict_deck_inference(
+                "p1",
+                payload.player_one_deck,
+                matched_catalog=p1_entry.matched_catalog_cards,
+                source=p1_entry.source,
+                hinted_cards=p1_entry.hinted_cards,
+            )
+            strict_validation.append(p1_entry)
+        if p2_source.endswith(":deck"):
+            p2_entry = _build_strict_validation_entry("p2", payload.player_two_deck or [])
+            _enforce_strict_deck_inference(
+                "p2",
+                payload.player_two_deck,
+                matched_catalog=p2_entry.matched_catalog_cards,
+                source=p2_entry.source,
+                hinted_cards=p2_entry.hinted_cards,
+            )
+            strict_validation.append(p2_entry)
+        if opp_source.endswith(":deck"):
+            opp_entry = _build_strict_validation_entry("opponent", payload.player_two_deck or [])
+            _enforce_strict_deck_inference(
+                "opponent",
+                payload.player_two_deck,
+                matched_catalog=opp_entry.matched_catalog_cards,
+                source=opp_entry.source,
+                hinted_cards=opp_entry.hinted_cards,
+            )
+            strict_validation.append(opp_entry)
 
     result = simulate_simple_match(
         max_turns=payload.max_turns,
@@ -447,26 +680,77 @@ def run_match(payload: MatchRequest) -> MatchResponse:
         resolved_player_one_intent_weights=player_one_weights,
         resolved_player_two_intent_weights=player_two_weights,
         resolved_weights_source=";".join((p1_source, p2_source, opp_source)),
+        strict_validation=strict_validation,
     )
 
 
 @router.post("/decision", response_model=DecisionResponse)
 def explain_decision(payload: DecisionRequest) -> DecisionResponse:
     store = IntentPresetStore()
-    active_weights, active_source = _resolve_weights(
+    active_weights, active_source, active_missing = _resolve_weights(
         explicit_weights=payload.active_player_intent_weights,
         deck=payload.active_player_deck,
         preset_name=payload.active_player_intent_preset,
         preset_store=store,
         actor_label="active",
     )
-    opponent_weights, opponent_source = _resolve_weights(
+    opponent_weights, opponent_source, opponent_missing = _resolve_weights(
         explicit_weights=payload.opponent_intent_weights,
         deck=payload.opponent_deck,
         preset_name=payload.opponent_intent_preset,
         preset_store=store,
         actor_label="opponent",
     )
+    strict_validation: list[StrictIntentValidationEntry] = []
+    if payload.strict_intent_resolution:
+        missing = [name for name in (active_missing, opponent_missing) if name]
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail=_strict_intent_error_detail(
+                    "STRICT_INTENT_PRESET_MISSING",
+                    f"Missing intent preset(s): {', '.join(sorted(set(missing)))}",
+                    context={"missing_presets": sorted(set(missing))},
+                ),
+            )
+        if active_source.endswith(":default"):
+            raise HTTPException(
+                status_code=422,
+                detail=_strict_intent_error_detail(
+                    "STRICT_INTENT_INPUT_REQUIRED",
+                    "Strict intent resolution requires explicit intent weights, a preset, or deck data for the active player.",
+                    context={"actor": "active_player"},
+                ),
+            )
+        if opponent_source.endswith(":default"):
+            raise HTTPException(
+                status_code=422,
+                detail=_strict_intent_error_detail(
+                    "STRICT_INTENT_INPUT_REQUIRED",
+                    "Strict intent resolution requires explicit intent weights, a preset, or deck data for the opponent.",
+                    context={"actor": "opponent"},
+                ),
+            )
+        if active_source.endswith(":deck"):
+            active_entry = _build_strict_validation_entry("active_player", payload.active_player_deck or [])
+            _enforce_strict_deck_inference(
+                "active_player",
+                payload.active_player_deck,
+                matched_catalog=active_entry.matched_catalog_cards,
+                source=active_entry.source,
+                hinted_cards=active_entry.hinted_cards,
+            )
+            strict_validation.append(active_entry)
+        if opponent_source.endswith(":deck"):
+            opponent_entry = _build_strict_validation_entry("opponent", payload.opponent_deck or [])
+            _enforce_strict_deck_inference(
+                "opponent",
+                payload.opponent_deck,
+                matched_catalog=opponent_entry.matched_catalog_cards,
+                source=opponent_entry.source,
+                hinted_cards=opponent_entry.hinted_cards,
+            )
+            strict_validation.append(opponent_entry)
     if payload.active_player_id == 1:
         by_player = {1: active_weights, 2: opponent_weights}
     else:
@@ -521,4 +805,5 @@ def explain_decision(payload: DecisionRequest) -> DecisionResponse:
         resolved_active_player_intent_weights=GameEngineFSM._normalize_intent_weights(active_weights),
         resolved_opponent_intent_weights=GameEngineFSM._normalize_intent_weights(opponent_weights),
         resolved_weights_source=";".join((active_source, opponent_source)),
+        strict_validation=strict_validation,
     )

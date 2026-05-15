@@ -25,6 +25,30 @@ Este repo ya incluye:
   - ingesta desde Lorcast (`POST /ingest/lorcana/lorcast`, usa https://api.lorcast.com/v0/cards/search),
   - ingesta desde URL (`POST /ingest/lorcana/source`).
 
+## Simulacion: strict mode
+
+La documentacion completa de strict mode (payloads, respuestas `200`/`422`, `error_code`, `strict_validation` y **version del contrato v1** de errores) esta en:
+
+- `docs/api/simulation-strict-mode.md`
+
+## Motor: prioridad de fidelidad de reglas
+
+- `docs/engine/rule-fidelity-criteria.md` — criterios (impacto, frecuencia, sesgo), clasificacion P0/P1/P2 y mapeo a tests del FSM.
+
+## Estado actual (checkpoint)
+
+- Backend MVP funcional con API de `ingestion`, `decks` y `simulate`.
+- Contrato estricto en simulacion (`strict` / `strict_intent_resolution`) con errores versionados (`contract_version: "1"`).
+- FSM reforzado con validacion de legalidad de acciones (evita aplicar acciones invalidas).
+- Golden tests agregados para transiciones de engine y snapshot de contrato en `/simulate/match`.
+- Suite de pruebas actual: `68 passed` en `backend`.
+
+## Roadmap de continuidad
+
+El plan de trabajo para retomar en una nueva sesion esta en:
+
+- `ROADMAP.md`
+
 ## Comandos rapidos
 
 Infra local:

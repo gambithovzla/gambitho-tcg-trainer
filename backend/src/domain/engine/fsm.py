@@ -131,6 +131,11 @@ class GameEngineFSM:
             return
         if action.player_id != self.state.active_player_id:
             return
+        if not self._is_action_legal(action):
+            self.state.action_log.append(
+                f"P{action.player_id} cannot execute illegal action '{action.action_type}'."
+            )
+            return
 
         if isinstance(action, DevelopInkAction):
             self._develop_ink(action.player_id)
@@ -254,6 +259,16 @@ class GameEngineFSM:
             self.state.active_player_id = 1 if action.player_id == 2 else 2
             self.state.turn_number += 1
             self._start_turn(player_id=self.state.active_player_id)
+
+    def _is_action_legal(self, action: GameAction) -> bool:
+        legal_actions = self.get_legal_actions()
+        requested = self._action_signature(action)
+        return any(self._action_signature(candidate) == requested for candidate in legal_actions)
+
+    @staticmethod
+    def _action_signature(action: GameAction) -> tuple[str, tuple[tuple[str, object], ...]]:
+        payload = tuple(sorted(vars(action).items()))
+        return action.action_type, payload
 
     def _start_turn(self, player_id: int) -> None:
         self.state.phase = "ready"

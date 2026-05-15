@@ -73,6 +73,12 @@ def simulate_simple_match(
     player_two_intent_weights: dict[str, float] | None = None,
     opponent_intent_weights: dict[str, float] | None = None,
 ) -> MatchResult:
+    """Run a full match until a lore win or the turn budget is exhausted.
+
+    The main loop runs while ``engine.state.turn_number <= max_turns`` and there is no winner.
+    Each ``end_turn`` advances ``turn_number`` by one. If no player reaches ``target_lore`` before
+    the budget is hit, ``turns_played`` (``turn_number``) is ``max_turns + 1`` on exit.
+    """
     intent_weights_by_player = {
         1: player_one_intent_weights or {},
         2: player_two_intent_weights or {},

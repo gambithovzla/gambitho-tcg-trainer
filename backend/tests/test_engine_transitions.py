@@ -2,6 +2,7 @@ from src.domain.engine.actions import (
     ChallengeAction,
     DevelopInkAction,
     EndTurnAction,
+    PlayCharacterAction,
     QuestAction,
 )
 from src.domain.engine.fsm import CharacterInPlay, GameEngineFSM
@@ -162,6 +163,42 @@ def test_play_character_consumes_matching_hand_intent() -> None:
     assert p1.board_fresh_characters == 1
 
 
+def test_illegal_play_character_does_not_spend_ink_or_change_state() -> None:
+    engine = GameEngineFSM(target_lore=10)
+    p1 = engine.state.players[1]
+    p1.hand_intents = ["tempo"]
+    p1.ink_total = 3
+    p1.ink_available = 3
+    engine._sync_hand_size(p1)
+
+    illegal = PlayCharacterAction(
+        player_id=1,
+        cost=1,
+        strength=9,
+        willpower=9,
+        lore_value=9,
+        archetype="tempo",
+    )
+    engine.apply_action(illegal)
+
+    assert p1.ink_available == 3
+    assert p1.hand_intents == ["tempo"]
+    assert len(p1.battlefield) == 0
+    assert any("illegal action" in line for line in engine.state.action_log)
+
+
+def test_illegal_quest_amount_is_rejected() -> None:
+    engine = GameEngineFSM(target_lore=10)
+    _setup_p1_with_ready_character(engine)
+    p1 = engine.state.players[1]
+
+    engine.apply_action(QuestAction(player_id=1, amount=5))
+
+    assert p1.lore == 0
+    assert p1.board_ready_characters == 1
+    assert any("illegal action" in line for line in engine.state.action_log)
+
+
 def test_sing_song_requires_song_intent_and_consumes_it() -> None:
     engine = GameEngineFSM(target_lore=10)
     p1 = engine.state.players[1]
@@ -193,3 +230,73 @@ def test_intent_profile_biases_initial_hand_generation() -> None:
 
     assert set(engine.state.players[1].hand_intents) == {"song"}
     assert set(engine.state.players[2].hand_intents) == {"tempo"}
+
+
+def test_golden_opening_flow_develop_play_quest() -> None:
+    engine = GameEngineFSM(target_lore=10)
+    p1 = engine.state.players[1]
+    p2 = engine.state.players[2]
+
+    engine.apply_action(DevelopInkAction(player_id=1))
+    engine.apply_action(EndTurnAction(player_id=1))
+    engine.apply_action(DevelopInkAction(player_id=2))
+    engine.apply_action(EndTurnAction(player_id=2))
+
+    p1.hand_intents = ["defender", "tempo"]
+    engine._sync_hand_size(p1)
+    engine.apply_action(DevelopInkAction(player_id=1))
+    play = next(
+        action
+        for action in engine.get_legal_actions()
+        if action.action_type == "play_character" and action.archetype == "tempo"
+    )
+    engine.apply_action(play)
+    engine.apply_action(EndTurnAction(player_id=1))
+    engine.apply_action(EndTurnAction(player_id=2))
+
+    quest = next(action for action in engine.get_legal_actions() if action.action_type == "quest")
+    engine.apply_action(quest)
+
+    assert engine.state.active_player_id == 1
+    assert engine.state.turn_number == 5
+    assert engine.state.total_turns_taken == 4
+    assert p1.lore == 1
+    assert p1.ink_total == 2
+    assert p1.ink_available == 2
+    assert p1.hand_size == 1
+    assert p1.deck_size == 51
+    assert p1.board_ready_characters == 0
+    assert p1.board_exerted_characters == 1
+    assert p1.board_fresh_characters == 0
+    assert p2.hand_size == 8
+    assert p2.deck_size == 51
+
+
+def test_golden_challenge_flow_damage_persists_across_turns() -> None:
+    engine = GameEngineFSM(target_lore=10)
+    _setup_p1_with_ready_character(engine)
+    p1 = engine.state.players[1]
+    p2 = engine.state.players[2]
+
+    p1.battlefield = [CharacterInPlay(strength=3, willpower=3, damage=0, exerted=False, summoning_sick=False)]
+    p2.battlefield = [CharacterInPlay(strength=1, willpower=2, damage=0, exerted=True, summoning_sick=False)]
+    GameEngineFSM._sync_board_counts(p1)
+    GameEngineFSM._sync_board_counts(p2)
+
+    engine.apply_action(ChallengeAction(player_id=1))
+
+    assert len(p1.battlefield) == 1
+    assert p1.battlefield[0].damage == 1
+    assert p1.board_ready_characters == 0
+    assert p1.board_exerted_characters == 1
+    assert len(p2.battlefield) == 0
+    assert p2.board_exerted_characters == 0
+
+    engine.apply_action(EndTurnAction(player_id=1))
+    engine.apply_action(EndTurnAction(player_id=2))
+
+    assert engine.state.active_player_id == 1
+    assert p1.battlefield[0].damage == 1
+    assert p1.battlefield[0].exerted is False
+    assert p1.battlefield[0].summoning_sick is False
+    assert p1.board_ready_characters == 1
