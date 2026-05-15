@@ -180,3 +180,16 @@ def test_sing_song_requires_song_intent_and_consumes_it() -> None:
 
     assert p1.hand_intents == []
     assert p1.lore == 1
+
+
+def test_intent_profile_biases_initial_hand_generation() -> None:
+    engine = GameEngineFSM(
+        target_lore=10,
+        intent_weights_by_player={
+            1: {"tempo": 0.0, "aggressive": 0.0, "quester": 0.0, "defender": 0.0, "song": 1.0},
+            2: {"tempo": 1.0, "aggressive": 0.0, "quester": 0.0, "defender": 0.0, "song": 0.0},
+        },
+    )
+
+    assert set(engine.state.players[1].hand_intents) == {"song"}
+    assert set(engine.state.players[2].hand_intents) == {"tempo"}

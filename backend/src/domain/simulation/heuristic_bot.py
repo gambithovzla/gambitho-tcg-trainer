@@ -69,8 +69,18 @@ def simulate_simple_match(
     known_opponent_combo_potential: float | None = None,
     min_opponent_combo_potential: float | None = None,
     max_opponent_combo_potential: float | None = None,
+    player_one_intent_weights: dict[str, float] | None = None,
+    player_two_intent_weights: dict[str, float] | None = None,
+    opponent_intent_weights: dict[str, float] | None = None,
 ) -> MatchResult:
-    engine = GameEngineFSM(target_lore=target_lore)
+    intent_weights_by_player = {
+        1: player_one_intent_weights or {},
+        2: player_two_intent_weights or {},
+    }
+    engine = GameEngineFSM(
+        target_lore=target_lore,
+        intent_weights_by_player=intent_weights_by_player,
+    )
     bot_1 = _build_bot(strategy=strategy, ismcts_iterations=ismcts_iterations)
     bot_2 = _build_bot(strategy=strategy, ismcts_iterations=ismcts_iterations)
     bots = {1: bot_1, 2: bot_2}
@@ -91,6 +101,8 @@ def simulate_simple_match(
                 known_opponent_combo_potential=known_opponent_combo_potential,
                 min_opponent_combo_potential=min_opponent_combo_potential,
                 max_opponent_combo_potential=max_opponent_combo_potential,
+                opponent_intent_weights=opponent_intent_weights
+                or intent_weights_by_player[1 if active == 2 else 2],
             )
             action = bot.choose_action(
                 engine=engine,

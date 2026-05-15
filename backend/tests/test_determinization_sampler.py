@@ -52,3 +52,25 @@ def test_sampler_uses_turn_decay_for_aggressive_profile() -> None:
     opponent = sampled.state.players[2]
     # For late turns, aggressive fallback range is narrowed by decay.
     assert 2 <= opponent.hidden_hand_size <= 2
+
+
+def test_sampler_applies_opponent_intent_weights_to_hidden_hand() -> None:
+    sampler = BeliefDeterminizationSampler()
+    engine = GameEngineFSM(target_lore=20)
+    context = DeterminizationContext(
+        root_player_id=1,
+        known_opponent_hand_size=4,
+        opponent_intent_weights={
+            "tempo": 0.0,
+            "aggressive": 0.0,
+            "quester": 0.0,
+            "defender": 0.0,
+            "song": 1.0,
+        },
+    )
+
+    sampled = sampler.determinize(engine=engine, context=context, rng=random.Random(5))
+
+    opponent = sampled.state.players[2]
+    assert opponent.hand_size == 4
+    assert opponent.hand_intents == ["song", "song", "song", "song"]

@@ -66,29 +66,30 @@ class GameState:
 
 
 class GameEngineFSM:
+    INTENT_KEYS: tuple[str, ...] = ("tempo", "aggressive", "quester", "defender", "song")
+    DEFAULT_INTENT_WEIGHTS: dict[str, float] = {
+        "tempo": 0.30,
+        "aggressive": 0.20,
+        "quester": 0.20,
+        "defender": 0.15,
+        "song": 0.15,
+    }
     CHARACTER_TEMPLATES: tuple[dict[str, int | str], ...] = (
         {"archetype": "tempo", "cost": 2, "strength": 2, "willpower": 2, "lore_value": 1},
         {"archetype": "aggressive", "cost": 3, "strength": 3, "willpower": 2, "lore_value": 1},
         {"archetype": "quester", "cost": 3, "strength": 2, "willpower": 3, "lore_value": 2},
         {"archetype": "defender", "cost": 4, "strength": 2, "willpower": 4, "lore_value": 1},
     )
-    DRAW_INTENT_CYCLE: tuple[str, ...] = (
-        "tempo",
-        "song",
-        "aggressive",
-        "quester",
-        "tempo",
-        "defender",
-        "song",
-        "aggressive",
-        "quester",
-        "tempo",
-    )
 
-    def __init__(self, target_lore: int = 20) -> None:
+    def __init__(
+        self,
+        target_lore: int = 20,
+        intent_weights_by_player: dict[int, dict[str, float]] | None = None,
+    ) -> None:
         self.state = GameState()
         self.target_lore = target_lore
         self.bag = TheBag()
+        self._intent_weights_by_player = self._build_intent_weights_by_player(intent_weights_by_player)
         self._initialize_player_hands()
         self._start_turn(player_id=self.state.active_player_id)
 
@@ -117,7 +118,10 @@ class GameEngineFSM:
         return legal
 
     def clone(self) -> "GameEngineFSM":
-        cloned = GameEngineFSM(target_lore=self.target_lore)
+        cloned = GameEngineFSM(
+            target_lore=self.target_lore,
+            intent_weights_by_player=copy.deepcopy(self._intent_weights_by_player),
+        )
         cloned.state = copy.deepcopy(self.state)
         cloned.bag = self.bag.clone()
         return cloned
@@ -337,15 +341,15 @@ class GameEngineFSM:
     def _initialize_player_hands(self) -> None:
         for player_id, player in self.state.players.items():
             player.hand_intents = [
-                self.DRAW_INTENT_CYCLE[(index + player_id - 1) % len(self.DRAW_INTENT_CYCLE)]
+                self._intent_from_profile(player_id=player_id, sequence_index=index)
                 for index in range(player.hand_size)
             ]
             self._sync_hand_size(player)
 
     def _next_draw_intent(self, player_id: int, current_deck_size: int) -> str:
-        # Deterministic pseudo-deck draw from a fixed cycle.
-        cycle_index = (player_id * 11 + current_deck_size) % len(self.DRAW_INTENT_CYCLE)
-        return self.DRAW_INTENT_CYCLE[cycle_index]
+        # Deterministic pseudo-draw from weighted profile.
+        sequence_index = max(0, 53 - current_deck_size)
+        return self._intent_from_profile(player_id=player_id, sequence_index=sequence_index)
 
     @staticmethod
     def _sync_hand_size(player: PlayerState) -> None:
@@ -354,7 +358,11 @@ class GameEngineFSM:
     def _ensure_hand_intents_consistency(self, player: PlayerState) -> None:
         if len(player.hand_intents) < player.hand_size:
             missing = player.hand_size - len(player.hand_intents)
-            player.hand_intents.extend(["tempo"] * missing)
+            start_index = len(player.hand_intents)
+            player.hand_intents.extend(
+                self._intent_from_profile(player.player_id, start_index + offset)
+                for offset in range(missing)
+            )
         elif len(player.hand_intents) > player.hand_size:
             player.hand_intents = player.hand_intents[: player.hand_size]
         self._sync_hand_size(player)
@@ -372,6 +380,46 @@ class GameEngineFSM:
         for preferred in ("defender", "tempo", "aggressive", "quester", "song"):
             if self._remove_one_intent(player, preferred):
                 return
+
+    @classmethod
+    def _normalize_intent_weights(cls, weights: dict[str, float] | None) -> dict[str, float]:
+        normalized: dict[str, float] = {}
+        source = weights or {}
+        for key in cls.INTENT_KEYS:
+            value = source.get(key, cls.DEFAULT_INTENT_WEIGHTS[key])
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                numeric = cls.DEFAULT_INTENT_WEIGHTS[key]
+            normalized[key] = max(0.0, numeric)
+        total = sum(normalized.values())
+        if total <= 0:
+            return dict(cls.DEFAULT_INTENT_WEIGHTS)
+        return {key: (value / total) for key, value in normalized.items()}
+
+    def _build_intent_weights_by_player(
+        self,
+        overrides: dict[int, dict[str, float]] | None,
+    ) -> dict[int, dict[str, float]]:
+        out: dict[int, dict[str, float]] = {}
+        for player_id in (1, 2):
+            candidate = None
+            if overrides is not None:
+                candidate = overrides.get(player_id)
+            out[player_id] = self._normalize_intent_weights(candidate)
+        return out
+
+    def _intent_from_profile(self, player_id: int, sequence_index: int) -> str:
+        weights = self._intent_weights_by_player[player_id]
+        # Deterministic pseudo-random roll in [0, 1).
+        key = (player_id * 9973 + (sequence_index + 1) * 7919 + self.target_lore * 101) % 10000
+        roll = key / 10000.0
+        cumulative = 0.0
+        for intent in self.INTENT_KEYS:
+            cumulative += weights[intent]
+            if roll <= cumulative:
+                return intent
+        return self.INTENT_KEYS[-1]
 
     @staticmethod
     def _find_ready_character(player: PlayerState) -> CharacterInPlay | None:

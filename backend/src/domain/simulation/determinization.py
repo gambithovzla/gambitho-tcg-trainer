@@ -17,6 +17,7 @@ class DeterminizationContext:
     known_opponent_combo_potential: float | None = None
     min_opponent_combo_potential: float | None = None
     max_opponent_combo_potential: float | None = None
+    opponent_intent_weights: dict[str, float] | None = None
 
 
 class InformationSetSampler(Protocol):
@@ -180,5 +181,44 @@ class BeliefDeterminizationSampler:
                 rng=rng,
                 is_aggressive=is_aggressive,
             )
+            self._sample_hidden_intents(
+                engine=sampled,
+                player_id=player_id,
+                hand_size=player.hidden_hand_size,
+                context=context,
+                rng=rng,
+            )
 
         return sampled
+
+    def _sample_hidden_intents(
+        self,
+        engine: GameEngineFSM,
+        player_id: int,
+        hand_size: int,
+        context: DeterminizationContext,
+        rng: random.Random,
+    ) -> None:
+        player = engine.state.players[player_id]
+        weights = context.opponent_intent_weights or {}
+        normalized = engine._normalize_intent_weights(weights)
+        intents = list(engine.INTENT_KEYS)
+        cumulative: list[float] = []
+        running = 0.0
+        for intent in intents:
+            running += normalized[intent]
+            cumulative.append(running)
+
+        sampled_intents: list[str] = []
+        target_size = max(0, hand_size)
+        for _ in range(target_size):
+            roll = rng.random()
+            selected = intents[-1]
+            for intent, threshold in zip(intents, cumulative):
+                if roll <= threshold:
+                    selected = intent
+                    break
+            sampled_intents.append(selected)
+
+        player.hand_intents = sampled_intents
+        player.hand_size = len(sampled_intents)
