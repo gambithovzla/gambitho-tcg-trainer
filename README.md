@@ -41,7 +41,7 @@ La documentacion completa de strict mode (payloads, respuestas `200`/`422`, `err
 - Contrato estricto en simulacion (`strict` / `strict_intent_resolution`) con errores versionados (`contract_version: "1"`).
 - FSM reforzado con validacion de legalidad de acciones (evita aplicar acciones invalidas).
 - Golden tests agregados para transiciones de engine y snapshot de contrato en `/simulate/match`.
-- Suite de pruebas actual: `68 passed` en `backend`.
+- Suite de pruebas actual: `86 passed` en `backend`.
 
 ## Roadmap de continuidad
 
@@ -65,6 +65,20 @@ python -m venv .venv
 pip install -e .[dev]
 uvicorn src.api.main:app --reload
 ```
+
+Benchmark offline (reproducible por `seed`):
+
+```bash
+python -m src.domain.simulation.benchmark --seeds 7,11,19 --matches-per-seed 20 --max-turns 12 --target-lore 8 --ismcts-iterations 64
+```
+
+Ejemplo de lectura base: `docs/benchmarks/baseline-fase2-v1.md`.
+
+Sensibilidad por iteraciones de ISMCTS: `docs/benchmarks/sensitivity-ismcts-iterations-v1.md`.
+
+A/B de rollout policy (`random` vs `guided_v1`): `docs/benchmarks/rollout-policy-ab-v1.md`.
+
+Benchmark espejo de jugador inicial: `docs/benchmarks/mirror-start-player-v1.md`.
 
 ## Variables de entorno (ingesta opcional)
 
