@@ -2,166 +2,139 @@
 
 Plan de continuidad para llevar `gambitho-tcg-trainer` desde MVP tecnico a v1 util de entrenamiento.
 
-## Estado de partida
+## Estado de partida (actualizado)
 
-- Base de infraestructura local lista (PostgreSQL, Neo4j, Qdrant).
-- Ingesta Lorcana funcionando (fuentes directas, Lorcast y LorcanaJSON).
-- Linter/reparacion de mazos operativo.
-- Simulacion con `heuristic` e `ismcts` base disponible via API.
-- Strict mode de intents implementado y documentado (incluye `contract_version: "1"` en errores).
-- Test suite backend estable: `92 passed`.
-- Ingesta híbrida canónica (`/ingest/lorcana/hybrid`) y comando de bootstrap/re-sync disponibles.
-- Metadatos de protocolo de turnos expuestos en respuestas de simulación.
+### Completado recientemente
 
-## Fase 1 - Simulator confiable (prioridad alta)
+| Area | Entregable |
+|------|------------|
+| **Catálogo real** | ~2960 cartas EN en PostgreSQL (stats, reglas, tags). Soporte Railway via `POSTGRES_DSN`. |
+| **Imagenes oficiales** | `image_url` / `image_thumbnail_url` (Ravensburger). CLI `image_backfill` y ingesta híbrida. |
+| **Ingesta híbrida** | `POST /ingest/lorcana/hybrid`, `hybrid_bootstrap`, precedencia Lorcast/LorcanaJSON. |
+| **API catálogo** | `GET /catalog/cards`, `GET /catalog/cards/{id}`. |
+| **Frontend** | UI Next.js: simulacion, decks, ingesta + **catálogo visual** de cartas físicas. |
+| **Protocolo de turnos** | `turn_protocol_version`, `starting_player_id` en respuestas de match. |
+| **Engine P0** | Challenge con defensor explicito; song con rutas gratis/pagada. |
+| **Calidad** | Suite backend **94 passed**; benchmarks en `docs/benchmarks/`. |
 
-Objetivo: asegurar consistencia de reglas e invariantes para evitar sesgos fuertes en entrenamiento.
+### Base ya existente
 
-1. Completar reglas de engine de mayor impacto:
-   - seleccionar objetivo explicito en challenge (no solo primer exerted).
-   - separar costos/condiciones de song vs cantar gratis cuando aplique el caso.
-   - revisar reglas de finalizacion y conteo de turnos (`turns_played`).
+- Infra local opcional (PostgreSQL, Neo4j, Qdrant).
+- Linter/reparacion de mazos.
+- Simulacion `heuristic` / `ismcts` con strict mode documentado.
+- Contrato de errores `contract_version: "1"`.
+
+---
+
+## Fase 0 — Catálogo y datos (cerrada)
+
+Objetivo: cartas reales, persistidas y visibles como las físicas.
+
+- [x] Ingesta LorcanaJSON completa (EN).
+- [x] Esquema SQL con `fact_card_rules` y URLs de imagen.
+- [x] Backfill / re-sync de imagenes.
+- [x] UI de catálogo con arte oficial.
+
+**Siguiente mejora opcional:** re-ingesta periódica o job en Railway para sets nuevos; Lorcast como enriquecimiento.
+
+---
+
+## Fase 1 — Simulator confiable (prioridad alta)
+
+Objetivo: consistencia de reglas e invariantes para evitar sesgos en entrenamiento.
+
+1. Completar reglas de engine de mayor impacto (P1):
+   - efectos de texto / habilidades mas alla del scaffold actual.
+   - revisar reglas de finalizacion y conteo de turnos (`turns_played`) — ver ISSUE-002.
 2. Ampliar golden tests de engine:
    - secuencias con doble challenge y acumulacion de dano.
-   - escenarios de borde (mano vacia, deck vacio, sin acciones salvo `end_turn`).
+   - escenarios de borde (mano vacia, deck vacio, solo `end_turn`).
 3. Ampliar golden tests de API:
-   - snapshot de contrato para `/simulate/decision`.
-   - snapshot para respuesta de `/simulate/intent-profile` en modo `strict`.
+   - snapshot de `/simulate/decision`.
+   - snapshot de `/simulate/intent-profile` en modo `strict`.
+
+**Hecho en P0:** target explicito en challenge (ISSUE-005); song costos/condiciones (ISSUE-006).
 
 Definition of Done Fase 1:
 - sin regresiones en golden tests.
 - contratos API de simulacion cubiertos por tests snapshot.
 - suite verde en CI local.
 
-## Fase 2 - ISMCTS mas fuerte
+---
+
+## Fase 2 — ISMCTS mas fuerte
 
 Objetivo: mejorar calidad de decisiones de manera medible.
 
-1. Mejorar rollout policy:
-   - heuristicas de tempo/lore-race en rollouts.
-   - penalizacion de lineas dominadas.
-2. Determinization mas informada:
-   - reforzar uso de senales de mano/rangos.
-   - calibrar pesos por perfil de mazo.
-3. Benchmarks offline:
-   - script reproducible por seed.
-   - metricas: winrate, varianza, duracion media, distribucion de acciones.
+1. Rollout policy `guided_v2` y A/B vs `random` en modo espejo.
+2. Determinizacion mas informada (mano/rangos, pesos por perfil de mazo).
+3. Benchmarks reproducibles por seed (ya hay CLI; ampliar reportes).
 
 Definition of Done Fase 2:
 - mejora medible vs baseline heuristico.
-- reporte de benchmark reproducible guardado en repo.
+- reporte de benchmark versionado en `docs/benchmarks/`.
 
-## Fase 3 - Training loop y operacion
+---
+
+## Fase 3 — Training loop y operacion
 
 Objetivo: ciclo de iteracion rapido para experimentar.
 
-1. Pipeline de experimentos:
-   - configuraciones versionadas.
-   - ejecucion batch de simulaciones.
-   - export de resultados.
-2. Observabilidad:
-   - tiempos por endpoint/estrategia.
-   - errores por `error_code`.
-3. UX tecnica minima:
-   - presets y perfiles listos para pruebas comparativas.
-   - guia de "runbook" para ejecutar evaluacion completa.
+1. Pipeline de experimentos (configs versionadas, batch, export).
+2. Observabilidad (latencia por endpoint, errores por `error_code`).
+3. UX: constructor de mazos visual desde catálogo (arrastrar cartas, no solo JSON).
 
 Definition of Done Fase 3:
-- un flujo unico de experimento end-to-end reproducible.
+- flujo end-to-end reproducible en un comando.
 - comparativa entre configuraciones en una sola corrida.
+
+---
 
 ## Backlog inmediato (siguiente sesion)
 
-1. Diseñar `guided_v2` (rollout policy) con foco explicito en reducir sesgo P1 sin aumentar draws.
-2. Correr A/B (`random` vs `guided_v2`) en modo espejo como criterio de aceptacion.
-3. Ampliar corrida espejo (mismo protocolo) a escala baseline para confirmar que la mejora no es solo ruido de muestra.
+1. **Mazos visuales:** armar deck desde catálogo (clic → JSON / validacion).
+2. **ISSUE-001 / ISSUE-002 / ISSUE-003:** snapshots y contrato `turns_played` + cobertura strict en match/decision.
+3. **guided_v2** + benchmark espejo como criterio de aceptacion (Fase 2).
+4. **Despliegue:** backend + frontend en Railway/Vercel con misma `POSTGRES_DSN`.
+
+---
 
 ## Issue list (lista operativa)
 
 ### ISSUE-001: Golden snapshot de `/simulate/decision`
 
-Objetivo:
-- Congelar contrato base de salida para detectar cambios no intencionales.
+- Estado: **pendiente**
+- Criterio: test estable en `test_simulation_api.py`.
 
-Tareas:
-- Crear test snapshot para claves obligatorias y tipos.
-- Verificar invariantes de `options`, `resolved_weights_source` y `strict_validation`.
-- Cubrir caso `strict_intent_resolution=true` y caso normal.
+### ISSUE-002: Contrato de `turns_played`
 
-Criterio de cierre:
-- Test nuevo estable en `test_simulation_api.py` y suite verde.
-
-### ISSUE-002: Definir contrato de `turns_played`
-
-Objetivo:
-- Eliminar ambiguedad de conteo de turnos en `/simulate/match`.
-
-Tareas:
-- Decidir semantica final (`<= max_turns` vs `max_turns + 1` posible).
-- Ajustar implementacion o documentacion para reflejar contrato real.
-- Añadir test de regresion de limite de turnos.
-
-Criterio de cierre:
-- Contrato documentado + test estable + sin inconsistencias en API docs.
+- Estado: **pendiente**
+- Criterio: semantica documentada + test de limite.
 
 ### ISSUE-003: Cobertura de `STRICT_INTENT_INPUT_REQUIRED`
 
-Objetivo:
-- Asegurar consistencia de errores strict en todos los endpoints de simulacion.
+- Estado: **pendiente**
+- Criterio: tests en `/simulate/match` y `/simulate/decision`.
 
-Tareas:
-- Añadir tests de rechazo por input faltante en `/simulate/match`.
-- Añadir tests de rechazo por input faltante en `/simulate/decision`.
-- Verificar presencia de `contract_version`, `error_code` y `context`.
+### ISSUE-004: Criterios de fidelidad de reglas
 
-Criterio de cierre:
-- Tests de error strict completos para `intent-profile`, `match`, `decision`.
-
-### ISSUE-004: Criterios de fidelidad de reglas (engine)
-
-Objetivo:
-- Priorizar reglas del FSM por impacto real en calidad de entrenamiento.
-
-Tareas:
-- Crear documento corto de criterios (impacto, frecuencia, riesgo de sesgo).
-- Clasificar reglas en P0/P1/P2.
-- Vincular cada regla priorizada a test/golden esperado.
-
-**Documento:** [`docs/engine/rule-fidelity-criteria.md`](docs/engine/rule-fidelity-criteria.md)
-
-Criterio de cierre:
-- Documento de criterios disponible y usado para ordenar el backlog de Fase 1.
+- Estado: **hecho** — [`docs/engine/rule-fidelity-criteria.md`](docs/engine/rule-fidelity-criteria.md)
 
 ### ISSUE-005: Target selection explicito en challenge
 
-Objetivo:
-- Evitar simplificacion excesiva de combate (hoy toma primer exerted).
-
-Tareas:
-- Extender `ChallengeAction` para seleccionar objetivo.
-- Ajustar legalidad y aplicacion de dano/banish.
-- Agregar tests de seleccion de objetivo y regresion.
-
-**Estado:** `ChallengeAction(defender_index)` y una acción legal por defensor exerted; ver tests en `test_engine_transitions.py`.
-
-Criterio de cierre:
-- API interna del engine soporta target explicito y tests de combate cubren el flujo.
+- Estado: **hecho** — `ChallengeAction(defender_index)` + tests en `test_engine_transitions.py`.
 
 ### ISSUE-006: Reglas de song (costos/condiciones)
 
-Objetivo:
-- Acercar modelo de canciones a comportamiento de juego esperado.
+- Estado: **hecho** — `SingSongAction` con rutas gratis/pagada + tests.
 
-Tareas:
-- Separar condicion de "cantar gratis" vs pago por tinta.
-- Actualizar acciones legales y resolucion de `SingSongAction`.
-- Añadir tests de casos permitidos/no permitidos.
+### ISSUE-007: Catálogo visual e imagenes oficiales
 
-**Estado:** `SingSongAction` soporta `uses_singer` con dos rutas legales (`cost=0` gratis con singer listo, `cost=1` pagada sin singer), con cobertura dedicada en `test_engine_transitions.py`.
+- Estado: **hecho**
+- Entregables: columnas de imagen, `image_backfill`, `/catalog/*`, UI en `frontend/`.
 
-Criterio de cierre:
-- Reglas de song coherentes, testeadas y sin regresiones.
+---
 
 ## Prompt sugerido para retomar
 
-"Continuemos con Fase 2 del `ROADMAP.md`: implementar `guided_v2` y compararlo en benchmark espejo contra `random`."
+"Continuemos con Fase 1 del `ROADMAP.md`: golden snapshots de `/simulate/decision` y constructor de mazos visual desde el catálogo."
