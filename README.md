@@ -36,13 +36,14 @@ Documentacion de strict mode (payloads, `422`, `error_code`, `contract_version: 
 
 ## Estado actual (checkpoint)
 
-- Catálogo real en PostgreSQL (~2960 cartas EN via LorcanaJSON) con stats, reglas e **imagenes oficiales**.
-- Ingesta híbrida LorcanaJSON + Lorcast con precedencia configurable.
-- Protocolo de turnos expuesto en respuestas de simulacion (`turn_protocol_version`, `starting_player_id`).
-- Frontend operativo contra la API local.
+- Catálogo real en PostgreSQL (~2960 cartas EN) con stats, `rules_text`, subtypes e **imagenes oficiales**.
+- Ingesta híbrida, API `/catalog/*`, frontend con catálogo visual.
+- Simulacion **MVP con intents abstractos** (`tempo`, `aggressive`, …): util para infra y ISMCTS experimental, **no** sustituye partidas con cartas reales del catálogo.
 - Suite backend: **94 passed**.
 
-Plan de continuidad: `ROADMAP.md`
+**Prioridad del proyecto:** Fase A en `ROADMAP.md` — motor FSM con decks de 60 `card_uuid` (ISSUE-008). Hasta entonces, deck builder "competitivo" y meta son roadmap, no capacidad actual.
+
+Plan completo (visión élite, gaps, estimaciones): `ROADMAP.md`
 
 ## Arranque rapido (local)
 
