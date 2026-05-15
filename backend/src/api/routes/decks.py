@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+import os
 
 from src.domain.linter.lorcana_linter import (
     DeckRepairResult,
@@ -9,6 +10,13 @@ from src.domain.linter.lorcana_linter import (
 from src.infra.db.postgres.card_repository import PostgresCardRepository
 
 router = APIRouter()
+
+
+def _catalog_fallback_mode() -> str:
+    value = os.getenv("CATALOG_FALLBACK_MODE", "degraded").strip().lower()
+    if value not in {"degraded", "strict"}:
+        return "degraded"
+    return value
 
 
 class DeckCardInput(BaseModel):
@@ -69,6 +77,11 @@ def validate_deck(payload: DeckValidationRequest) -> DeckValidationResponse:
                 [card.card_id for card in payload.cards]
             )
         except Exception as exc:
+            if _catalog_fallback_mode() == "strict":
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Catalog validation required but repository is unavailable: {exc}",
+                ) from exc
             warnings.append(f"Catalog validation skipped: {exc}")
 
     result: DeckValidationResult = linter.validate(
@@ -108,6 +121,11 @@ def repair_deck(payload: DeckRepairRequest) -> DeckRepairResponse:
                 [card.card_id for card in payload.cards]
             )
         except Exception as exc:
+            if _catalog_fallback_mode() == "strict":
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Catalog validation required but repository is unavailable: {exc}",
+                ) from exc
             warnings.append(f"Catalog validation skipped: {exc}")
 
     repaired: DeckRepairResult = linter.repair(deck_tuples, existing_card_ids=existing_card_ids)

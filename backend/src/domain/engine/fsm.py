@@ -63,6 +63,7 @@ class GameState:
     )
     action_log: list[str] = field(default_factory=list)
     winner_player_id: int | None = None
+    turn_protocol_version: str = "1"
 
 
 class GameEngineFSM:
@@ -113,7 +114,16 @@ class GameEngineFSM:
             opponent = self.state.players[opponent_id]
             if self._find_ready_character(player) is not None:
                 for defender_index in self._exerted_battlefield_indices(opponent):
-                    legal.append(ChallengeAction(player_id=active, defender_index=defender_index))
+                    defender = opponent.battlefield[defender_index]
+                    legal.append(
+                        ChallengeAction(
+                            player_id=active,
+                            defender_index=defender_index,
+                            defender_strength=defender.strength,
+                            defender_willpower=defender.willpower,
+                            defender_lore_value=defender.lore_value,
+                        )
+                    )
             if "song" in player.hand_intents:
                 if self._find_ready_character(player) is not None:
                     legal.append(SingSongAction(player_id=active, cost=0, amount=1, uses_singer=True))
@@ -126,6 +136,7 @@ class GameEngineFSM:
         cloned = GameEngineFSM(
             target_lore=self.target_lore,
             intent_weights_by_player=copy.deepcopy(self._intent_weights_by_player),
+            starting_player_id=self._first_turn_player_id,
         )
         cloned.state = copy.deepcopy(self.state)
         cloned.bag = self.bag.clone()
@@ -284,6 +295,9 @@ class GameEngineFSM:
 
     @staticmethod
     def _action_signature(action: GameAction) -> tuple[str, tuple[tuple[str, object], ...]]:
+        if isinstance(action, ChallengeAction):
+            payload = (("defender_index", action.defender_index), ("player_id", action.player_id))
+            return action.action_type, payload
         payload = tuple(sorted(vars(action).items()))
         return action.action_type, payload
 

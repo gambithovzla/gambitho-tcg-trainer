@@ -23,3 +23,10 @@ CREATE TABLE IF NOT EXISTS dim_card_tags (
   card_type TEXT,
   subtypes TEXT[]
 );
+
+CREATE TABLE IF NOT EXISTS fact_card_rules (
+  card_uuid TEXT PRIMARY KEY REFERENCES dim_card_core (uuid),
+  rules_text TEXT NOT NULL DEFAULT '',
+  source_provider TEXT NOT NULL DEFAULT 'generic',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

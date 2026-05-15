@@ -120,6 +120,7 @@ class LorcanaIngestor:
             "card_type": card_type,
             "subtypes": subtypes,
             "text": raw.get("text") or raw.get("abilities") or "",
+            "source_provider": "lorcast",
         }
 
     def _normalize_lorcanajson_card(self, raw: dict) -> dict | None:
@@ -179,6 +180,7 @@ class LorcanaIngestor:
             "card_type": card_type,
             "subtypes": subtypes,
             "text": text if isinstance(text, str) else str(text or ""),
+            "source_provider": "lorcanajson",
         }
 
     def _normalize_generic_card(self, raw: dict) -> dict | None:
@@ -213,6 +215,7 @@ class LorcanaIngestor:
             "card_type": card_type,
             "subtypes": subtypes,
             "text": raw.get("text") or raw.get("abilities") or "",
+            "source_provider": "generic",
         }
 
     @staticmethod
@@ -256,19 +259,15 @@ class LorcanaIngestor:
                 return [payload]
         return []
 
-    def ingest_from_payload(self, payload: list[dict]) -> IngestionSummary:
-        normalized_cards: list[dict] = []
+    def ingest_from_normalized_cards(
+        self,
+        normalized_cards: list[dict],
+        *,
+        cards_seen: int | None = None,
+        cards_rejected: int = 0,
+    ) -> IngestionSummary:
         sql_records: list[CardRecord] = []
-        rejected = 0
-
-        for raw in payload:
-            normalized = self.normalize_raw_card(raw)
-            if not normalized:
-                rejected += 1
-                continue
-
-            normalized_cards.append(normalized)
-
+        for normalized in normalized_cards:
             sql_records.append(
                 CardRecord(
                     uuid=normalized["id"],
@@ -286,6 +285,8 @@ class LorcanaIngestor:
                     color_aspect=normalized["color_aspect"],
                     card_type=normalized["card_type"],
                     subtypes=normalized["subtypes"],
+                    rules_text=normalized.get("text") or "",
+                    source_provider=normalized.get("source_provider") or "generic",
                 )
             )
 
@@ -295,9 +296,24 @@ class LorcanaIngestor:
         vector_loaded = self._embed_indexer.index(normalized_cards)
 
         return IngestionSummary(
-            cards_seen=len(payload),
+            cards_seen=cards_seen if cards_seen is not None else len(normalized_cards),
             cards_loaded_sql=sql_loaded,
             cards_loaded_graph=graph_loaded,
             cards_loaded_vector=vector_loaded,
+            cards_rejected=cards_rejected,
+        )
+
+    def ingest_from_payload(self, payload: list[dict]) -> IngestionSummary:
+        normalized_cards: list[dict] = []
+        rejected = 0
+        for raw in payload:
+            normalized = self.normalize_raw_card(raw)
+            if not normalized:
+                rejected += 1
+                continue
+            normalized_cards.append(normalized)
+        return self.ingest_from_normalized_cards(
+            normalized_cards,
+            cards_seen=len(payload),
             cards_rejected=rejected,
         )

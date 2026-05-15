@@ -70,6 +70,14 @@ def test_first_player_skips_first_draw_step() -> None:
     assert any("skips draw" in line for line in engine.state.action_log)
 
 
+def test_starting_player_two_skips_first_draw_step() -> None:
+    engine = GameEngineFSM(starting_player_id=2)
+    p2 = engine.state.players[2]
+    assert p2.hand_size == 7
+    assert p2.deck_size == 53
+    assert any("P2 skips draw on the first turn." in line for line in engine.state.action_log)
+
+
 def test_quest_requires_ready_character_and_removes_quest_action_after_use() -> None:
     engine = GameEngineFSM(target_lore=10)
     p1 = engine.state.players[1]
@@ -358,6 +366,9 @@ def test_challenge_generates_one_legal_action_per_exerted_opponent_character() -
     legal = [action for action in engine.get_legal_actions() if isinstance(action, ChallengeAction)]
     assert len(legal) == 2
     assert {action.defender_index for action in legal} == {0, 1}
+    assert all(action.defender_strength is not None for action in legal)
+    assert all(action.defender_willpower is not None for action in legal)
+    assert all(action.defender_lore_value is not None for action in legal)
 
 
 def test_challenge_can_target_second_exerted_defender_only() -> None:

@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+:root {
+  --background: #090a13;
+  --foreground: #e8ecff;
+  --card: #121628;
+  --card-soft: #161c33;
+  --accent: #9e7bff;
+  --accent-2: #57d2ff;
+  --border: #253057;
+  --ok: #5fe2a8;
+  --warn: #ffd37a;
+  --error: #ff7e99;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+.surface {
+  background: linear-gradient(145deg, rgba(27, 35, 66, 0.85), rgba(16, 21, 40, 0.85));
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  backdrop-filter: blur(6px);
+}
+
+.panel-title {
+  letter-spacing: 0.01em;
+  font-weight: 650;
+}
+
+.subtle {
+  color: color-mix(in srgb, var(--foreground) 72%, #7184bf);
+}
+
+.chip {
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: color-mix(in srgb, white 88%, var(--accent));
+}
+
+.json-block {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: #0c1120;
+  color: #d9e2ff;
+  overflow: auto;
+  max-height: 24rem;
+  padding: 0.75rem;
+  font-size: 0.825rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.field {
+  width: 100%;
+  border-radius: 0.65rem;
+  border: 1px solid #314071;
+  background: #0f1730;
+  color: #e3e9ff;
+  padding: 0.55rem 0.75rem;
+  transition: border-color 0.2s ease;
+}
+
+.field:focus {
+  outline: none;
+  border-color: #75a7ff;
+}
+
+.btn {
+  border-radius: 0.7rem;
+  border: 1px solid #3a4b82;
+  background: linear-gradient(145deg, #27396c, #1f2d58);
+  color: #ecf1ff;
+  padding: 0.55rem 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.2s ease;
+}
+
+.btn:hover {
+  filter: brightness(1.08);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-secondary {
+  background: linear-gradient(145deg, #1e2849, #1a233f);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

@@ -9,7 +9,9 @@ Plan de continuidad para llevar `gambitho-tcg-trainer` desde MVP tecnico a v1 ut
 - Linter/reparacion de mazos operativo.
 - Simulacion con `heuristic` e `ismcts` base disponible via API.
 - Strict mode de intents implementado y documentado (incluye `contract_version: "1"` en errores).
-- Test suite backend estable: `90 passed`.
+- Test suite backend estable: `92 passed`.
+- Ingesta híbrida canónica (`/ingest/lorcana/hybrid`) y comando de bootstrap/re-sync disponibles.
+- Metadatos de protocolo de turnos expuestos en respuestas de simulación.
 
 ## Fase 1 - Simulator confiable (prioridad alta)
 

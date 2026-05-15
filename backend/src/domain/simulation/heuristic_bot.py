@@ -20,6 +20,10 @@ class MatchResult:
     turns_played: int
     history: list[str]
     starting_player_id: int
+    final_phase: str
+    final_active_player_id: int
+    total_turns_taken: int
+    turn_protocol_version: str
 
 
 class HeuristicBot:
@@ -37,7 +41,15 @@ class HeuristicBot:
             )
         for action in legal_actions:
             if isinstance(action, ChallengeAction):
-                return action
+                challenge_options = [a for a in legal_actions if isinstance(a, ChallengeAction)]
+                return max(
+                    challenge_options,
+                    key=lambda a: (
+                        2 * max(0, getattr(a, "defender_lore_value", 0) or 0)
+                        + max(0, getattr(a, "defender_strength", 0) or 0)
+                        - max(0, getattr(a, "defender_willpower", 0) or 0)
+                    ),
+                )
         for action in legal_actions:
             if isinstance(action, QuestAction):
                 return action
@@ -151,4 +163,8 @@ def simulate_simple_match(
         turns_played=engine.state.turn_number,
         history=engine.state.action_log,
         starting_player_id=starting_player_id,
+        final_phase=engine.state.phase,
+        final_active_player_id=engine.state.active_player_id,
+        total_turns_taken=engine.state.total_turns_taken,
+        turn_protocol_version=engine.state.turn_protocol_version,
     )

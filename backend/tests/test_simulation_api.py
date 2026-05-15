@@ -44,6 +44,9 @@ def test_decision_endpoint_golden_contract_snapshot() -> None:
         "resolved_opponent_intent_weights",
         "resolved_weights_source",
         "strict_validation",
+        "turn_number",
+        "phase",
+        "turn_protocol_version",
     }
     assert expected_keys.issubset(body.keys())
     assert body["chosen_action_type"] in {
@@ -58,6 +61,9 @@ def test_decision_endpoint_golden_contract_snapshot() -> None:
     assert body["total_iterations"] == 24
     assert body["resolved_weights_source"] == "active:manual;opponent:manual"
     assert body["strict_validation"] == []
+    assert body["turn_protocol_version"] == "1"
+    assert isinstance(body["turn_number"], int)
+    assert body["phase"] in {"ready", "draw", "main", "end"}
 
     for key in ("resolved_active_player_intent_weights", "resolved_opponent_intent_weights"):
         weights = body[key]
@@ -270,6 +276,10 @@ def test_match_endpoint_golden_contract_snapshot() -> None:
         "resolved_player_two_intent_weights",
         "resolved_weights_source",
         "strict_validation",
+        "final_phase",
+        "final_active_player_id",
+        "total_turns_taken",
+        "turn_protocol_version",
     }
     assert expected_keys.issubset(body.keys())
     assert body["winner_player_id"] in {None, 1, 2}
@@ -280,6 +290,10 @@ def test_match_endpoint_golden_contract_snapshot() -> None:
     assert any("wins by lore" in line for line in body["history"]) or body["turns_played"] == payload["max_turns"] + 1
     assert body["resolved_weights_source"] == "p1:manual;p2:manual;opp:manual"
     assert body["strict_validation"] == []
+    assert body["turn_protocol_version"] == "1"
+    assert isinstance(body["total_turns_taken"], int)
+    assert isinstance(body["final_active_player_id"], int)
+    assert body["final_phase"] in {"ready", "draw", "main", "end"}
 
     for key in ("resolved_player_one_intent_weights", "resolved_player_two_intent_weights"):
         weights = body[key]

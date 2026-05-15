@@ -41,7 +41,7 @@ La documentacion completa de strict mode (payloads, respuestas `200`/`422`, `err
 - Contrato estricto en simulacion (`strict` / `strict_intent_resolution`) con errores versionados (`contract_version: "1"`).
 - FSM reforzado con validacion de legalidad de acciones (evita aplicar acciones invalidas).
 - Golden tests agregados para transiciones de engine y snapshot de contrato en `/simulate/match`.
-- Suite de pruebas actual: `90 passed` en `backend`.
+- Suite de pruebas actual: `92 passed` en `backend`.
 
 ## Roadmap de continuidad
 
@@ -66,10 +66,39 @@ pip install -e .[dev]
 uvicorn src.api.main:app --reload
 ```
 
+Frontend (desde `frontend`):
+
+```bash
+npm install
+npm run dev
+```
+
+Frontend URL: `http://127.0.0.1:3000`  
+Swagger backend: `http://127.0.0.1:8000/docs`
+
+Config de API para frontend (opcional, por defecto usa `http://127.0.0.1:8000`):
+
+```bash
+# frontend/.env.local
+NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+```
+
 Benchmark offline (reproducible por `seed`):
 
 ```bash
 python -m src.domain.simulation.benchmark --seeds 7,11,19 --matches-per-seed 20 --max-turns 12 --target-lore 8 --ismcts-iterations 64
+```
+
+Bootstrap/re-sync de catálogo real híbrido (LorcanaJSON + Lorcast):
+
+```bash
+python -m src.infra.ingestion.hybrid_bootstrap --language en --lorcanajson-set-codes 1,2 --lorcast-queries "set:1,set:2" --include-lorcanajson --include-lorcast
+```
+
+Endpoint canónico de ingesta híbrida:
+
+```http
+POST /ingest/lorcana/hybrid
 ```
 
 Benchmark con rollout policy y modo espejo (sesgo de primer turno):
@@ -101,3 +130,4 @@ Si no defines estas variables, la ingesta sigue escribiendo en **PostgreSQL** y 
 | `NEO4J_DATABASE` | Base logica (por defecto `neo4j`) |
 | `QDRANT_URL` | Ej. `http://localhost:6333` — si esta vacio, no se indexa en Qdrant |
 | `QDRANT_COLLECTION` | Nombre de coleccion (por defecto `lorcana_cards`) |
+| `CATALOG_FALLBACK_MODE` | `degraded` (default) o `strict`; en `strict` los endpoints fallan si catálogo PostgreSQL no está disponible |

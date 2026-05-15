@@ -1,4 +1,5 @@
 from typing import Literal
+import os
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -13,6 +14,13 @@ from src.infra.simulation.intent_preset_store import IntentPresetStore
 
 router = APIRouter()
 STRICT_INTENT_CONTRACT_VERSION = "1"
+
+
+def _catalog_fallback_mode() -> str:
+    value = os.getenv("CATALOG_FALLBACK_MODE", "degraded").strip().lower()
+    if value not in {"degraded", "strict"}:
+        return "degraded"
+    return value
 
 
 class IntentDeckCardInput(BaseModel):
@@ -75,6 +83,10 @@ class MatchResponse(BaseModel):
     resolved_player_two_intent_weights: dict[str, float]
     resolved_weights_source: str
     strict_validation: list["StrictIntentValidationEntry"] = Field(default_factory=list)
+    final_phase: str
+    final_active_player_id: int
+    total_turns_taken: int
+    turn_protocol_version: str
 
 
 class IntentProfileRequest(BaseModel):
@@ -184,6 +196,9 @@ class DecisionResponse(BaseModel):
     resolved_opponent_intent_weights: dict[str, float]
     resolved_weights_source: str
     strict_validation: list["StrictIntentValidationEntry"] = Field(default_factory=list)
+    turn_number: int
+    phase: str
+    turn_protocol_version: str
 
 
 class StrictIntentValidationEntry(BaseModel):
@@ -221,7 +236,16 @@ def _infer_weights_from_deck_with_metadata(
         profiles = repository.get_intent_profiles([card.card_id for card in deck])
         if profiles:
             source = "catalog+input"
-    except Exception:
+    except Exception as exc:
+        if _catalog_fallback_mode() == "strict":
+            raise HTTPException(
+                status_code=503,
+                detail=_strict_intent_error_detail(
+                    "CATALOG_REQUIRED_UNAVAILABLE",
+                    f"Catalog repository unavailable while strict fallback mode is enabled: {exc}",
+                    context={"fallback_mode": "strict"},
+                ),
+            ) from exc
         profiles = {}
         source = "input_only"
 
@@ -681,6 +705,10 @@ def run_match(payload: MatchRequest) -> MatchResponse:
         resolved_player_two_intent_weights=player_two_weights,
         resolved_weights_source=";".join((p1_source, p2_source, opp_source)),
         strict_validation=strict_validation,
+        final_phase=result.final_phase,
+        final_active_player_id=result.final_active_player_id,
+        total_turns_taken=result.total_turns_taken,
+        turn_protocol_version=result.turn_protocol_version,
     )
 
 
@@ -806,4 +834,7 @@ def explain_decision(payload: DecisionRequest) -> DecisionResponse:
         resolved_opponent_intent_weights=GameEngineFSM._normalize_intent_weights(opponent_weights),
         resolved_weights_source=";".join((active_source, opponent_source)),
         strict_validation=strict_validation,
+        turn_number=engine.state.turn_number,
+        phase=engine.state.phase,
+        turn_protocol_version=engine.state.turn_protocol_version,
     )

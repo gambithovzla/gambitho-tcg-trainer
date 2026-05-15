@@ -22,6 +22,8 @@ class CardRecord:
     color_aspect: list[str]
     card_type: str | None
     subtypes: list[str]
+    rules_text: str
+    source_provider: str
 
 
 @dataclass(frozen=True)
@@ -103,6 +105,22 @@ class PostgresCardRepository:
                             card.willpower,
                             card.lore,
                             card.move_cost,
+                        ),
+                    )
+
+                    cur.execute(
+                        """
+                        INSERT INTO fact_card_rules (card_uuid, rules_text, source_provider)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (card_uuid) DO UPDATE SET
+                          rules_text = EXCLUDED.rules_text,
+                          source_provider = EXCLUDED.source_provider,
+                          updated_at = NOW()
+                        """,
+                        (
+                            card.uuid,
+                            card.rules_text,
+                            card.source_provider,
                         ),
                     )
 
