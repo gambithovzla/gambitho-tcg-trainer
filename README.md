@@ -39,19 +39,21 @@ Documentacion de strict mode (payloads, `422`, `error_code`, `contract_version: 
 - Catálogo real en PostgreSQL (~2960 cartas EN) con stats, `rules_text`, subtypes e **imagenes oficiales**.
 - Ingesta híbrida, API `/catalog/*`, frontend con catálogo visual.
 - Simulacion **proxy** (`POST /simulate/match`): intents abstractos — legacy/ISMCTS experimental.
-- Simulacion **real** (`POST /simulate/match/real`): 60 `card_id`, Character/Action/Song/Item/Location, mulligan, keywords P0 (`real-5`). Ward = targeting de efectos, no retos.
-- Suite backend: ejecutar `pytest` en `backend/` (incluye `test_real_card_engine.py`).
+- Simulacion **real** (`POST /simulate/match/real`): 60 `card_id`, Character/Action/Song/Item/Location, mulligan, **9 keywords P0**, The Bag LIFO (`real-5`). Ward = targeting de efectos, no retos.
+- Suite backend: ejecutar `pytest` en `backend/` (incluye `test_real_card_engine.py` y el **golden de partida completa** `test_real_match_golden.py`).
 
-**Prioridad:** cerrar Fase A — ampliar efectos de `rules_text` y triggers restantes. Ver `ROADMAP.md`.
+**Fase A (motor real):** DoD esencialmente cumplido — partida bot-vs-bot 100 % catálogo de principio a fin, golden determinista con ≥5 keywords y combate, **121 tests verdes**. Pendiente: smoke en producción contra Railway (`scripts/run_real_match_sample.py`) y, ya fuera de P0, los efectos avanzados de `rules_text`. Ver `ROADMAP.md`.
 
 ### Simulación real (`real-5`) — in / out
 
-| In | Out |
+| In (real-5) | Out (deliberadamente fuera de P0) |
 |----|-----|
-| Character, Action, Song, **Item**, **Location** | Shift, Singer cost exacto, efectos en Location |
-| Ink, mulligan, quest/challenge | Triggers complejos del Bag (solo base LIFO implementada) |
-| Keywords P0 (Evasive, Bodyguard opcional exerted, Reckless, Support, …) | Targeting Ward en efectos |
-| Location: lore pasivo **Set step**; retar location; **move** (`move_cost`) | Item/Action: solo efectos básicos de `rules_text` (gain lore / draw) |
+| Mazos de 60 `card_id`: shuffle, mano, **mulligan** (sin inkable) | Shift |
+| Ink (1/turno); jugar **Character / Action / Song / Item / Location** | Singer: coste exacto de cantante por carta (hoy cualquier personaje listo canta) |
+| Quest; challenge (personaje **y** location); **move** (`move_cost`) | Ward como targeting de efectos (hoy solo impide ser retado) |
+| Keywords P0: **Evasive, Ward, Resist, Rush, Challenger, Bodyguard** (exerted opcional)**, Reckless, Support, Alert** | Efectos sobre/desde Location más allá del lore de Set step |
+| The Bag (LIFO): gain lore, draw, lore de Location en **Set step** | Triggers complejos del Bag (condicionales / encadenados) |
+| Efectos de `rules_text` por regex: `gain N lore`, `draw a/N card(s)` | Resto de efectos de `rules_text` (búsqueda, banish, bounce, buffs…) |
 
 Plan completo (visión élite, gaps, estimaciones): `ROADMAP.md`
 

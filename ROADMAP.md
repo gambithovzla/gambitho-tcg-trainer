@@ -85,13 +85,14 @@ y obtener: **mazo construido** → **guía de líneas por turno** → **winrate 
 ### A.4 API y tests
 
 - [ ] `POST /simulate/match` acepta decks como lista de `card_uuid` (+ copias); modo legacy de intents deprecado o paralelo.
-- [ ] Golden: partida mínima con 2 mazos del catálogo y al menos 5 keywords verificados en log/estado.
+- [x] Golden: partida mínima con 2 mazos del catálogo y al menos 5 keywords verificados en log/estado (`tests/test_real_match_golden.py`: ganador determinista, 7 keywords, combate).
 
-**Definition of Done Fase A**
+**Definition of Done Fase A** — ✅ esencialmente cumplido (`test_real_match_golden.py`, **121 tests verdes**)
 
-- Una partida bot vs bot usa **solo cartas del catálogo** de principio a fin.
-- Tests de regresión en keywords P0 y mulligan/draw.
-- Documentado en README qué reglas están **in** vs **out**.
+- [x] Una partida bot vs bot usa **solo cartas del catálogo** de principio a fin.
+- [x] Tests de regresión en keywords P0 y mulligan/draw.
+- [x] Documentado en README qué reglas están **in** vs **out**.
+- [ ] Smoke en **producción** (Railway) con `scripts/run_real_match_sample.py` — único pendiente (requiere DSN).
 
 **Estimación orientativa:** 3–4 meses (1 dev FT) para P0 jugable; 6+ meses para fidelidad alta.
 
@@ -197,10 +198,10 @@ Que el motor deje de depender de *intent profiles* abstractos y consuma el catá
 
 ### Criterio de cierre (epic completo)
 
-- [ ] Match API con dos listas de 60 UUIDs del catálogo termina sin error en producción.
+- [ ] Match API con dos listas de 60 UUIDs del catálogo termina sin error en producción (requiere DSN de Railway; `scripts/run_real_match_sample.py`).
 - [x] Log referencia **nombres** de cartas jugadas (`cards_referenced`).
-- [x] ≥ 5 keywords P0 con tests dedicados (5/5 básicos).
-- [ ] README tabla "in/out" de reglas ampliada.
+- [x] ≥ 5 keywords P0 con tests dedicados (9 keywords + golden de partida completa).
+- [x] README tabla "in/out" de reglas ampliada.
 
 ### Anti-objetivos (no hacer antes de cerrar 008)
 
