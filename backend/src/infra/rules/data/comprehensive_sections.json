@@ -1,0 +1,91 @@
+{
+  "source": "Disney Lorcana Comprehensive Rules (keyword chapters, EN)",
+  "sections": [
+    {
+      "id": "9.1",
+      "title": "General",
+      "text": "Keyword abilities provide an ability to the character based on that word. Some abilities stack, or combine; these abilities are followed by \"+{N}.\" A keyword ability that doesn't have a +{N} doesn't stack with other effects that provide that keyword."
+    },
+    {
+      "id": "9.2",
+      "title": "Bodyguard",
+      "text": "When you play this character, you may choose to have them enter play exerted. If an opposing character challenges one of your characters, they must choose one of your characters with Bodyguard if able."
+    },
+    {
+      "id": "9.3",
+      "title": "Challenger",
+      "text": "This character gets +N S while they are challenging (but not while they are being challenged). This stacks with other Challenger effects."
+    },
+    {
+      "id": "9.4",
+      "title": "Evasive",
+      "text": "A character without Evasive can't challenge this character, but this character can challenge characters with Evasive."
+    },
+    {
+      "id": "9.5",
+      "title": "Reckless",
+      "text": "This character can't quest and must challenge if able. A player can still exert this character to use their abilities."
+    },
+    {
+      "id": "9.6",
+      "title": "Resist",
+      "text": "Damage dealt to this character is reduced by N. If damage dealt to this character is reduced to 0, no damage is considered to have been dealt. This stacks with other Resist effects."
+    },
+    {
+      "id": "9.7",
+      "title": "Rush",
+      "text": "This character counts as dry for the purposes of challenging the turn it's played."
+    },
+    {
+      "id": "9.8",
+      "title": "Shift",
+      "text": "If you have a character in play with the same name as this character card, you may play this character for N instead of its normal ink cost. If you do, put this card on top of a character of yours with the same name."
+    },
+    {
+      "id": "9.9",
+      "title": "Singer",
+      "text": "This character counts as cost N to sing songs."
+    },
+    {
+      "id": "9.10",
+      "title": "Song",
+      "text": "A character with cost N or more can exert to sing this song for free."
+    },
+    {
+      "id": "9.11",
+      "title": "Support",
+      "text": "Whenever this character quests, you may add their current S to another chosen character's S this turn."
+    },
+    {
+      "id": "9.12",
+      "title": "Ward",
+      "text": "Opponents can't choose this character except to challenge. Effects that don't choose still affect this character."
+    },
+    {
+      "id": "6.5.6",
+      "title": "Location lore",
+      "text": "A location may have a lore L value, which is how much lore its player gains at the start of their turn during the Set step. Locations are never ready or exerted. They can be challenged at any time in the Main Phase."
+    },
+    {
+      "id": "4.3.5.19",
+      "title": "Challenge location",
+      "text": "Characters can challenge locations. Locations are never ready or exerted and can be challenged at any time in the Main Phase. Locations don't have Strength and don't deal damage to the challenging character."
+    },
+    {
+      "id": "4.3.6",
+      "title": "Move to location",
+      "text": "A player pays the location's move cost to move their character to that location. Characters can move the turn they are played."
+    }
+  ],
+  "location_engine": {
+    "passive_lore_at_set_step": true,
+    "never_ready_or_exerted": true,
+    "challenge_location_any_time": true,
+    "location_deals_no_challenge_damage": true
+  },
+  "challenge_engine": {
+    "evasive_defender_requires_attacker_keywords": ["Evasive", "Alert"],
+    "ward_blocks_targeting_not_challenge": true,
+    "notes": "Alert is defined on cards (LorcanaJSON); not in older printed CR PDF."
+  }
+}

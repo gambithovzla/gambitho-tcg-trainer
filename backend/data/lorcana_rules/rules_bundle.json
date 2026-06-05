@@ -1,0 +1,226 @@
+{
+  "format_version": "2",
+  "generated_at": "2026-05-15T14:37:12.868680+00:00",
+  "sources": [
+    "lorcanajson:en:allCards.json",
+    "comprehensive_sections_seed"
+  ],
+  "keywords": [
+    {
+      "id": "Alert",
+      "reminder_text": "This character can challenge as if they had Evasive.",
+      "comprehensive_text": null,
+      "section_id": null,
+      "keyword_value_number": null,
+      "treats_as_evasive_for_challenge": true
+    },
+    {
+      "id": "Bodyguard",
+      "reminder_text": "This character may enter play exerted. An opposing character who challenges one of your characters must choose a character with Bodyguard if able.",
+      "comprehensive_text": "When you play this character, you may choose to have them enter play exerted. If an opposing character challenges one of your characters, they must choose one of your characters with Bodyguard if able.",
+      "section_id": "9.2",
+      "keyword_value_number": null,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Boost",
+      "reminder_text": "Once during your turn, you may pay 2 ⬡ to put the top card of your deck facedown under this character.",
+      "comprehensive_text": null,
+      "section_id": null,
+      "keyword_value_number": 2,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Challenger",
+      "reminder_text": "While challenging, this character gets +2 ¤.",
+      "comprehensive_text": "This character gets +N S while they are challenging (but not while they are being challenged). This stacks with other Challenger effects.",
+      "section_id": "9.3",
+      "keyword_value_number": 2,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Evasive",
+      "reminder_text": "Only characters with Evasive can challenge this character.",
+      "comprehensive_text": "A character without Evasive can't challenge this character, but this character can challenge characters with Evasive.",
+      "section_id": "9.4",
+      "keyword_value_number": null,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Puppy Shift",
+      "reminder_text": "You may pay 3 ⬡ to play this on top of one of your Puppy characters.",
+      "comprehensive_text": null,
+      "section_id": null,
+      "keyword_value_number": 3,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Reckless",
+      "reminder_text": "This character can't quest and must challenge each turn if able.",
+      "comprehensive_text": "This character can't quest and must challenge if able. A player can still exert this character to use their abilities.",
+      "section_id": "9.5",
+      "keyword_value_number": null,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Resist",
+      "reminder_text": "Damage dealt to this character is reduced by 2.",
+      "comprehensive_text": "Damage dealt to this character is reduced by N. If damage dealt to this character is reduced to 0, no damage is considered to have been dealt. This stacks with other Resist effects.",
+      "section_id": "9.6",
+      "keyword_value_number": 2,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Rush",
+      "reminder_text": "This character can challenge the turn they're played.",
+      "comprehensive_text": "This character counts as dry for the purposes of challenging the turn it's played.",
+      "section_id": "9.7",
+      "keyword_value_number": null,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Shift",
+      "reminder_text": "You may discard 2 cards to play this on top of one of your characters named Flotsam or Jetsam.",
+      "comprehensive_text": "If you have a character in play with the same name as this character card, you may play this character for N instead of its normal ink cost. If you do, put this card on top of a character of yours with the same name.",
+      "section_id": "9.8",
+      "keyword_value_number": 6,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Sing Together",
+      "reminder_text": "Any number of your or your teammates' characters with total cost 10 or more may ⟳ to sing this song for free.",
+      "comprehensive_text": null,
+      "section_id": null,
+      "keyword_value_number": 7,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Singer",
+      "reminder_text": "This character counts as cost 5 to sing songs.",
+      "comprehensive_text": "This character counts as cost N to sing songs.",
+      "section_id": "9.9",
+      "keyword_value_number": 5,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Song",
+      "reminder_text": null,
+      "comprehensive_text": "A character with cost N or more can exert to sing this song for free.",
+      "section_id": "9.10",
+      "keyword_value_number": null,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Support",
+      "reminder_text": "Whenever this character quests, you may add their ¤ to another chosen character's ¤ this turn.",
+      "comprehensive_text": "Whenever this character quests, you may add their current S to another chosen character's S this turn.",
+      "section_id": "9.11",
+      "keyword_value_number": null,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Universal Shift",
+      "reminder_text": "You may pay 4 ⬡ to play this on top of any one of your characters.",
+      "comprehensive_text": null,
+      "section_id": null,
+      "keyword_value_number": 4,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Vanish",
+      "reminder_text": "When an opponent chooses this character for an action, banish them.",
+      "comprehensive_text": null,
+      "section_id": null,
+      "keyword_value_number": null,
+      "treats_as_evasive_for_challenge": false
+    },
+    {
+      "id": "Ward",
+      "reminder_text": "Illumineers can't choose this location except to challenge.",
+      "comprehensive_text": "Opponents can't choose this character except to challenge. Effects that don't choose still affect this character.",
+      "section_id": "9.12",
+      "keyword_value_number": null,
+      "treats_as_evasive_for_challenge": false
+    }
+  ],
+  "sections": [
+    {
+      "id": "9.1",
+      "title": "General",
+      "text": "Keyword abilities provide an ability to the character based on that word. Some abilities stack, or combine; these abilities are followed by \"+{N}.\" A keyword ability that doesn't have a +{N} doesn't stack with other effects that provide that keyword."
+    },
+    {
+      "id": "9.2",
+      "title": "Bodyguard",
+      "text": "When you play this character, you may choose to have them enter play exerted. If an opposing character challenges one of your characters, they must choose one of your characters with Bodyguard if able."
+    },
+    {
+      "id": "9.3",
+      "title": "Challenger",
+      "text": "This character gets +N S while they are challenging (but not while they are being challenged). This stacks with other Challenger effects."
+    },
+    {
+      "id": "9.4",
+      "title": "Evasive",
+      "text": "A character without Evasive can't challenge this character, but this character can challenge characters with Evasive."
+    },
+    {
+      "id": "9.5",
+      "title": "Reckless",
+      "text": "This character can't quest and must challenge if able. A player can still exert this character to use their abilities."
+    },
+    {
+      "id": "9.6",
+      "title": "Resist",
+      "text": "Damage dealt to this character is reduced by N. If damage dealt to this character is reduced to 0, no damage is considered to have been dealt. This stacks with other Resist effects."
+    },
+    {
+      "id": "9.7",
+      "title": "Rush",
+      "text": "This character counts as dry for the purposes of challenging the turn it's played."
+    },
+    {
+      "id": "9.8",
+      "title": "Shift",
+      "text": "If you have a character in play with the same name as this character card, you may play this character for N instead of its normal ink cost. If you do, put this card on top of a character of yours with the same name."
+    },
+    {
+      "id": "9.9",
+      "title": "Singer",
+      "text": "This character counts as cost N to sing songs."
+    },
+    {
+      "id": "9.10",
+      "title": "Song",
+      "text": "A character with cost N or more can exert to sing this song for free."
+    },
+    {
+      "id": "9.11",
+      "title": "Support",
+      "text": "Whenever this character quests, you may add their current S to another chosen character's S this turn."
+    },
+    {
+      "id": "9.12",
+      "title": "Ward",
+      "text": "Opponents can't choose this character except to challenge. Effects that don't choose still affect this character."
+    },
+    {
+      "id": "6.5.6",
+      "title": "Location lore",
+      "text": "A location may have a lore L value, which is how much lore its player gains at the start of their turn during the Set step. Locations are never ready or exerted. They can be challenged at any time in the Main Phase."
+    }
+  ],
+  "location_engine": {
+    "passive_lore_at_set_step": true,
+    "never_ready_or_exerted": true,
+    "challenge_location_any_time": true,
+    "location_deals_no_challenge_damage": true
+  },
+  "challenge_engine": {
+    "evasive_defender_requires_attacker_keywords": [
+      "Alert",
+      "Evasive"
+    ],
+    "ward_blocks_targeting_not_challenge": true
+  }
+}

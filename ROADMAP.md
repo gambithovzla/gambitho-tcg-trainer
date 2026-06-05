@@ -69,7 +69,7 @@ y obtener: **mazo construido** → **guía de líneas por turno** → **winrate 
 
 - [ ] Mazo de 60 `card_uuid` por jugador (shuffle, draw, mulligan).
 - [ ] Mano, board, inkwell y descarte como **instancias** (id de instancia + `card_uuid` + daño/exerted/ubicación).
-- [ ] Soporte Item y Location en board (aunque sea P0 limitado).
+- [x] Soporte Item y Location en board (P0: jugar, quest en Location; Item sin efectos de texto).
 
 ### A.2 Acciones desde catálogo
 
@@ -80,7 +80,7 @@ y obtener: **mazo construido** → **guía de líneas por turno** → **winrate 
 ### A.3 Reglas y The Bag
 
 - [ ] Parser o capa híbrida *keyword-first* + fragmentos de `rules_text` para efectos frecuentes.
-- [ ] The Bag: cola de triggers con orden LIFO (sustituir placeholder).
+- [x] The Bag base: cola de triggers con orden LIFO (gain lore/draw/location set step).
 
 ### A.4 API y tests
 
@@ -174,7 +174,7 @@ Tareas de calidad del MVP proxy; hacer cuando no roben foco de Fase A:
 
 ## ISSUE-008: Simulación con instancias de carta reales 🔴
 
-**Estado:** pendiente — **epic de Fase A**
+**Estado:** en progreso (spike) — **epic de Fase A**
 
 ### Objetivo
 
@@ -182,18 +182,25 @@ Que el motor deje de depender de *intent profiles* abstractos y consuma el catá
 
 ### Tareas
 
-1. `GameState` con zonas y `CardInstance` (`instance_id`, `card_uuid`, flags de juego).
-2. Cargar definiciones desde `PostgresCardRepository` (cache por partida).
-3. Acciones: play card, quest, challenge, sing, ink — derivadas de tipo y keywords.
-4. Adaptar bots para elegir acciones legales sobre estado real (heurística simple primero).
-5. Migrar tests: mantener suite proxy bajo flag hasta paridad; nuevos goldens en `test_real_card_engine.py`.
+1. [x] `CardInstance` + `RealGameState` (mazo 60, mano, board, ink).
+2. [x] Cargar definiciones desde catálogo (`PostgresCatalogProvider`).
+3. [x] Acciones: ink, jugar Character, quest, challenge, end turn (`POST /simulate/match/real`).
+4. [x] Bot heurístico mínimo + tests en `test_real_card_engine.py`.
+5. [x] Song, Action (básico); mulligan sin tinta; Item/Location P0; The Bag base LIFO.
+6. [x] Keywords P0: **Evasive**, **Ward**, **Resist**, **Rush**, **Challenger**, **Bodyguard**, **Reckless**, **Support** + tests.
 
-### Criterio de cierre
+### Entregado en spike (rama actual)
 
-- [ ] Match API con dos listas de 60 UUIDs del catálogo termina sin error.
-- [ ] Log o estado final referencia nombres/uuids de cartas jugadas al board.
-- [ ] ≥ 5 keywords P0 con tests dedicados.
-- [ ] README y este ROADMAP actualizados en tabla "in/out" de reglas.
+- Motor `RealCardGameEngine` (`engine_mode: real_cards`, `turn_protocol_version: real-5`).
+- Endpoint `POST /simulate/match/real` con decks `{ card_id, copies }` × 60.
+- Keyword **Evasive** en legalidad de challenge.
+
+### Criterio de cierre (epic completo)
+
+- [ ] Match API con dos listas de 60 UUIDs del catálogo termina sin error en producción.
+- [x] Log referencia **nombres** de cartas jugadas (`cards_referenced`).
+- [x] ≥ 5 keywords P0 con tests dedicados (5/5 básicos).
+- [ ] README tabla "in/out" de reglas ampliada.
 
 ### Anti-objetivos (no hacer antes de cerrar 008)
 
@@ -205,10 +212,11 @@ Que el motor deje de depender de *intent profiles* abstractos y consuma el catá
 
 ## Backlog inmediato (orden recomendado)
 
-1. **ISSUE-008** — diseño de `CardInstance` + spike: turno 1 con 2 mazos reales del catálogo.
-2. Documentar mapa keyword → handler en `docs/engine/keyword-handlers.md` (nuevo, corto).
-3. Mantenimiento: ISSUE-002 + ISSUE-001 si hay tiempo.
-4. ~~guided_v2 / benchmark espejo de intents~~ → **pospuesto** hasta Fase D.
+1. **ISSUE-008** — Rush/Ward/Resist + jugar Action/Song; mulligan; partida con IDs del catálogo Railway.
+2. Unificar o deprecar `/simulate/match` (proxy) cuando `real-1` cubra el flujo demo.
+3. Deck builder visual que exporte a `card_id` + `copies` para `/simulate/match/real`.
+4. Mantenimiento: ISSUE-002 + ISSUE-001.
+5. ~~guided_v2~~ → pospuesto hasta Fase D.
 
 ---
 

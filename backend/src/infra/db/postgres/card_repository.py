@@ -290,6 +290,19 @@ class PostgresCardRepository:
 
         return [self._catalog_row_to_card(row) for row in rows], total
 
+    def get_catalog_cards(self, card_ids: list[str]) -> dict[str, CatalogCard]:
+        if not card_ids:
+            return {}
+
+        with psycopg.connect(self._dsn, connect_timeout=self._connect_timeout) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"{self._catalog_select_sql()} WHERE core.uuid = ANY(%s)",
+                    (card_ids,),
+                )
+                rows = cur.fetchall()
+        return {row[0]: self._catalog_row_to_card(row) for row in rows}
+
     def get_catalog_card(self, card_id: str) -> CatalogCard | None:
         with psycopg.connect(self._dsn, connect_timeout=self._connect_timeout) as conn:
             with conn.cursor() as cur:

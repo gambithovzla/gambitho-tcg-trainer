@@ -6,14 +6,15 @@ Referencia de prioridad: [`rule-fidelity-criteria.md`](rule-fidelity-criteria.md
 
 | Keyword | Impacto | Handler previsto | Estado |
 |---------|---------|------------------|--------|
-| Evasive | P0 | `ChallengeLegality` — solo challengers con Evasive | Pendiente (real) |
-| Rush | P0 | `PlayRestrictions` — puede challenge turn played | Pendiente |
-| Ward | P0 | `TargetSelection` — no targeteable por rivales | Pendiente |
-| Resist | P0 | `DamageModification` — restar N al recibir daño | Pendiente |
-| Support | P0 | `QuestBonus` / static | Pendiente |
-| Bodyguard | P0 | `TargetSelection` — obligatorio si exerted | Pendiente |
-| Challenger | P1 | `ChallengeLegality` — +N strength al challenge | Pendiente |
-| Reckless | P1 | `MustChallenge` si able | Pendiente |
+| Evasive | P0 | Solo atacantes con Evasive o **Alert** retan defensor Evasive (CR 9.4) | Hecho |
+| Alert | P0 | Retar «como si tuviera Evasive»; no es Evasive al defender | Hecho |
+| Rush | P0 | `PlayRestrictions` — puede challenge turn played | Hecho (real FSM) |
+| Ward | P0 | Efectos rivales: no elegible; **sí** puede ser retado (CR 9.12) | Parcial (challenge OK; targeting pendiente) |
+| Resist | P0 | `DamageModification` — restar N al recibir daño | Hecho (real FSM) |
+| Support | P0 | `QuestBonus` — +S a aliado al quest | Hecho (real FSM) |
+| Bodyguard | P0 | `TargetSelection` si hay Bodyguard exerted retable; **opcional** entrar exerted al jugar | Hecho (real FSM) |
+| Challenger | P1 | `ChallengeLegality` — +N strength al challenge | Hecho (real FSM) |
+| Reckless | P1 | `MustChallenge` si able; no quest | Hecho (real FSM) |
 | Shift | P1 | `PlayReplacement` — jugar sobre personaje mismo nombre | Pendiente |
 
 ## Reglas de texto (`rules_text`)

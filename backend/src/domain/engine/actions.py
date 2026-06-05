@@ -98,9 +98,11 @@ class ChallengeAction(GameAction):
     """
 
     defender_index: int
+    defender_kind: str
     defender_strength: int | None = None
     defender_willpower: int | None = None
     defender_lore_value: int | None = None
+    attacker_index: int = -1
 
     def __init__(
         self,
@@ -109,10 +111,14 @@ class ChallengeAction(GameAction):
         defender_strength: int | None = None,
         defender_willpower: int | None = None,
         defender_lore_value: int | None = None,
+        attacker_index: int = -1,
+        defender_kind: str = "character",
     ):
         object.__setattr__(self, "player_id", player_id)
         object.__setattr__(self, "action_type", "challenge")
         object.__setattr__(self, "defender_index", defender_index)
+        object.__setattr__(self, "defender_kind", defender_kind)
         object.__setattr__(self, "defender_strength", defender_strength)
         object.__setattr__(self, "defender_willpower", defender_willpower)
         object.__setattr__(self, "defender_lore_value", defender_lore_value)
+        object.__setattr__(self, "attacker_index", attacker_index)

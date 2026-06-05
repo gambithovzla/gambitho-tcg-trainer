@@ -5,6 +5,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes.catalog import router as catalog_router
+from src.api.routes.rules import router as rules_router
+from src.api.routes.real_simulation import router as real_simulation_router
 from src.api.routes.decks import router as decks_router
 from src.api.routes.ingestion import router as ingestion_router
 from src.api.routes.simulation import router as simulation_router
@@ -27,6 +29,15 @@ def _load_env_file() -> None:
 
 _load_env_file()
 
+
+def _warm_rules_registry() -> None:
+    from src.infra.rules.registry import get_rules_registry
+
+    get_rules_registry()
+
+
+_warm_rules_registry()
+
 app = FastAPI(
     title="Gambitho TCG Trainer API",
     version="0.1.0",
@@ -45,8 +56,10 @@ app.add_middleware(
 )
 
 app.include_router(catalog_router, prefix="/catalog", tags=["catalog"])
+app.include_router(rules_router, prefix="/rules", tags=["rules"])
 app.include_router(decks_router, prefix="/decks", tags=["decks"])
 app.include_router(simulation_router, prefix="/simulate", tags=["simulation"])
+app.include_router(real_simulation_router, prefix="/simulate", tags=["simulation"])
 app.include_router(ingestion_router, prefix="/ingest", tags=["ingestion"])
 
 

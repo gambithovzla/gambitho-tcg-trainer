@@ -38,10 +38,20 @@ Documentacion de strict mode (payloads, `422`, `error_code`, `contract_version: 
 
 - Catálogo real en PostgreSQL (~2960 cartas EN) con stats, `rules_text`, subtypes e **imagenes oficiales**.
 - Ingesta híbrida, API `/catalog/*`, frontend con catálogo visual.
-- Simulacion **MVP con intents abstractos** (`tempo`, `aggressive`, …): util para infra y ISMCTS experimental, **no** sustituye partidas con cartas reales del catálogo.
-- Suite backend: **94 passed**.
+- Simulacion **proxy** (`POST /simulate/match`): intents abstractos — legacy/ISMCTS experimental.
+- Simulacion **real** (`POST /simulate/match/real`): 60 `card_id`, Character/Action/Song/Item/Location, mulligan, keywords P0 (`real-5`). Ward = targeting de efectos, no retos.
+- Suite backend: ejecutar `pytest` en `backend/` (incluye `test_real_card_engine.py`).
 
-**Prioridad del proyecto:** Fase A en `ROADMAP.md` — motor FSM con decks de 60 `card_uuid` (ISSUE-008). Hasta entonces, deck builder "competitivo" y meta son roadmap, no capacidad actual.
+**Prioridad:** cerrar Fase A — ampliar efectos de `rules_text` y triggers restantes. Ver `ROADMAP.md`.
+
+### Simulación real (`real-5`) — in / out
+
+| In | Out |
+|----|-----|
+| Character, Action, Song, **Item**, **Location** | Shift, Singer cost exacto, efectos en Location |
+| Ink, mulligan, quest/challenge | Triggers complejos del Bag (solo base LIFO implementada) |
+| Keywords P0 (Evasive, Bodyguard opcional exerted, Reckless, Support, …) | Targeting Ward en efectos |
+| Location: lore pasivo **Set step**; retar location; **move** (`move_cost`) | Item/Action: solo efectos básicos de `rules_text` (gain lore / draw) |
 
 Plan completo (visión élite, gaps, estimaciones): `ROADMAP.md`
 
@@ -114,6 +124,33 @@ npm run dev
 | API + Swagger | http://127.0.0.1:8000/docs |
 | Health | http://127.0.0.1:8000/health |
 | Catálogo (ejemplo) | http://127.0.0.1:8000/catalog/cards?search=ariel&limit=12 |
+| Simulación real (spike) | `POST /simulate/match/real` — ver Swagger |
+
+### Simulación con cartas reales (spike)
+
+Cuerpo mínimo (cada mazo: 15 entradas × 4 copias = 60 cartas):
+
+```http
+POST /simulate/match/real
+Content-Type: application/json
+
+{
+  "player_one_deck": [{"card_id": "1", "copies": 4}, ...],
+  "player_two_deck": [{"card_id": "2", "copies": 4}, ...],
+  "max_turns": 12,
+  "target_lore": 8,
+  "rng_seed": 42
+}
+```
+
+Respuesta incluye `engine_mode: "real_cards"` y `cards_referenced` (nombres jugados desde el catálogo).
+
+Partida de prueba contra tu catálogo Railway:
+
+```bash
+cd backend
+python scripts/run_real_match_sample.py --seed 42 --max-turns 12 --target-lore 8
+```
 
 ## Benchmark offline
 
@@ -151,3 +188,19 @@ GET /catalog/cards/{card_id}
 ```
 
 Las imagenes provienen de `images.full` / `images.thumbnail` en LorcanaJSON (CDN oficial Ravensburger). El frontend las muestra con proporcion de carta física (5:7).
+
+## Reglas oficiales (motor)
+
+El motor **no hardcodea** keywords: lee `backend/data/lorcana_rules/rules_bundle.json`, generado al arrancar o con sync:
+
+```bash
+cd backend
+python -m src.infra.rules.sync
+# o: POST http://127.0.0.1:8000/rules/sync
+```
+
+Fuentes del bundle:
+- **LorcanaJSON** (`allCards.json`): reminder text y keywords nuevos (Alert, Boost, …).
+- **Comprehensive Rules** (capítulos 9.x embebidos en `src/infra/rules/data/comprehensive_sections.json`).
+
+API: `GET /rules/bundle` — consulta reglas cargadas. Tras cambiar sets, vuelve a correr sync.
